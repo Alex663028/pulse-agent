@@ -1,0 +1,5 @@
+summarize the quarterly report
+draft a follow-up email to the client
+plan a 3-step migration of the database
+write a short brief from these meeting notes
+condense the changelog into release highlights
