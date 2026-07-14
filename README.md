@@ -1,30 +1,31 @@
-# Pulse — Hermes-style Self-improving AI Agent (Reliability-First)
+# Pulse — Self-improving AI Agent (Reliability-First)
 
 [![CI](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-73%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v0.1.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.1.0)
 
-A **self-improving personal AI agent** rebuilt from the ground up — inspired by
-[Nous Research's Hermes Agent](https://github.com/nousresearch/hermes-agent),
-with its three biggest weaknesses fixed as first-class concerns, while
-remaining **fully compatible with the [agentskills.io](https://agentskills.io)
-open standard and Hermes' skill format**.
-
-**Default stack is fully self-hosted** — Ollama + SQLite FTS5, zero cloud dependency.
+A **self-improving personal AI agent** with a reliability-first core.
+Compatible with the [agentskills.io](https://agentskills.io) open standard.
+**Fully self-hostable by default** — Ollama + SQLite FTS5, zero cloud dependency.
 
 ---
 
-## Why Pulse (vs Hermes)
+## Why Pulse
 
-| Hermes weakness | Pulse's fix |
+| Advantage | Detail |
 |---|---|
-| **Reliability** — early version, 780+ issues, fragile sub-agents | Every LLM/tool call wrapped in classified error recovery + exponential backoff + hard token budget |
-| **Skill quality unverified** — auto-generated skills promoted blindly | **Evaluation loop**: golden-task replay → success-rate/token comparison → `promote / quarantine / rollback` state machine |
-| **Steep onboarding** — complex setup, long time-to-value | `pulse init --yes` zero-config, Rich visual feedback, starter skills, `pulse doctor` self-check |
-| **Cloud lock-in** (Honcho / Modal / Nous Portal) | Default Ollama + local SQLite FTS5; any cloud API is opt-in |
-| **Single-agent ceiling** | Multi-agent team (Builder→Reviewer→Ship), sub-agent pool with failure isolation |
+| **Reliability-first orchestration** | Every LLM/tool call wrapped in classified error recovery + exponential backoff + hard token budget guardrail |
+| **Evaluated skill self-evolution** | Auto-generated skills must pass golden-task replay before promotion. `promote / quarantine / rollback` state machine with versioning |
+| **Zero-config onboarding** | `pulse init --yes` with built-in Ollama detection, Rich visual feedback, starter skills, `pulse doctor` self-check |
+| **Fully self-hosted** | Default Ollama + local SQLite FTS5; any cloud API is opt-in — no mandatory external service |
+| **Multi-agent orchestration** | Sub-agent parallel pool with failure isolation + result merge; Builder→Reviewer→Ship team pipeline |
+| **Dialectic user modeling** | Self-hosted replacement for Honcho — thesis → antithesis → synthesis profiling with versioned rollbacks |
+| **Agentskills.io compatible** | Load and run skills from the ecosystem without modification |
+| **Plugin system** | Dynamic discovery and activation; plugins can register tools, skills, and lifecycle hooks |
+| **RL training data pipeline** | Export execution trajectories in ChatML JSONL or ShareGPT format for fine-tuning |
+| **Cron scheduling** | Natural-language scheduling (`"every 5 min"`, `"daily at 8am"`) + standard cron expressions + pause/resume with execution history |
 
 ---
 
@@ -114,7 +115,7 @@ API keys are stored in `~/.pulse/.env` (never in config.yaml). Provider defaults
 
 ## Installing Skills from the Ecosystem
 
-Pulse loads any skill that follows the [agentskills.io](https://agentskills.io) standard or Hermes' extended format:
+Pulse loads any skill that follows the [agentskills.io](https://agentskills.io) standard:
 
 ```bash
 # From a local directory
@@ -149,10 +150,10 @@ pulse skills rollback my-skill --to 1.0.0  # revert to a previous version
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q   # 42 tests, all pass
+python -m pytest -q   # 96 tests, all pass
 ```
 
-Tests cover: Hermes skill loading | evaluation loop (promote/deprecate/rollback) |
+Tests cover: agentskills.io skill loading | evaluation loop (promote/deprecate/rollback) |
 error classification + retry | context budget overflow | orchestrator fault tolerance |
 sub-agent pool + error isolation | plugin discovery + activation | dialectic profiling |
 RL trajectory export | team orchestration.
@@ -171,4 +172,4 @@ RL trajectory export | team orchestration.
 
 ## License
 
-MIT — same as Hermes.
+Apache 2.0 — see [LICENSE](LICENSE).
