@@ -40,6 +40,8 @@ REVIEWER_SYSTEM = (
 
 @dataclass
 class TeamResult:
+    """Final result of a team orchestration run: answer, rounds executed and builder outputs."""
+
     task: str
     success: bool
     answer: str = ""
@@ -57,6 +59,7 @@ class TeamOrchestrator:
         self.pool = SubagentPool(max_workers=max_workers)
 
     def run(self, task: str, primary: LLMProvider, tools: Optional[ToolRegistry] = None) -> TeamResult:
+        """Run the full Builder → Reviewer pipeline for ``task``, swallowing unexpected exceptions into ``TeamResult.error``."""
         try:
             return self._run(task, primary, tools)
         except Exception as e:  # noqa: BLE001

@@ -36,6 +36,8 @@ DIALECTIC_SYSTEM = (
 
 
 class DialecticEngine:
+    """Local dialectical user-profile refinement with versioned USER.md snapshots."""
+
     def __init__(self, memory: MemoryStore, storage: Storage, llm: LLMProvider):
         self.memory = memory
         self.storage = storage
@@ -70,7 +72,7 @@ class DialecticEngine:
             if new_profile and len(new_profile) > 20 and new_profile != profile:
                 self._commit(profile, new_profile)
                 return new_profile
-        except Exception:
+        except (RuntimeError, OSError):
             pass
         return profile
 

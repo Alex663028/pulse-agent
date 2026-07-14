@@ -18,6 +18,7 @@ def _tokens(text: str) -> set[str]:
 
 
 def keyword_select(registry: SkillRegistry, query: str, top_k: int = 3) -> list[tuple[SkillRecord, float]]:
+    """Score skills by token overlap with ``query`` and return the top_k as (record, score) pairs."""
     q = _tokens(query)
     scored: list[tuple[SkillRecord, float]] = []
     for rec in registry._index.values():
@@ -32,6 +33,7 @@ def keyword_select(registry: SkillRegistry, query: str, top_k: int = 3) -> list[
 
 
 def select(registry: SkillRegistry, query: str, llm: Optional[LLMProvider] = None, top_k: int = 3) -> list[SkillRecord]:
+    """Return up to ``top_k`` skills relevant to ``query``, using keyword overlap then falling back to an LLM pick."""
     ranked = keyword_select(registry, query, top_k=top_k)
     if ranked or not llm:
         return [r for r, _ in ranked]
@@ -47,5 +49,5 @@ def select(registry: SkillRegistry, query: str, llm: Optional[LLMProvider] = Non
         name = resp.content.strip().split()[0].strip("`-")
         rec = registry.get(name)
         return [rec] if rec else []
-    except Exception:
+    except (RuntimeError, IndexError, AttributeError):
         return []

@@ -26,6 +26,7 @@ def _make_compat(settings: Settings, env: dict[str, str], provider: str) -> Open
 
 
 def build_router(settings: Settings) -> Router:
+    """Construct a ``Router`` from settings: MockProvider for ``mock``, otherwise an OpenAICompatProvider chain including configured fallbacks."""
     env = load_env(settings)
     ms = settings.model
     if ms.provider == "mock":

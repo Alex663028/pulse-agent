@@ -19,25 +19,33 @@ from pulse.cli.runtime import Runtime
 
 
 class Gateway(ABC):
+    """Abstract multi-platform entry point: accepts input via a channel and routes it through the orchestrator."""
+
     name: str = "gateway"
 
     @abstractmethod
-    def start(self, runtime: Runtime) -> None: ...
+    def start(self, runtime: Runtime) -> None:
+        """Begin serving the gateway against the given runtime (blocks until ``stop``)."""
 
     @abstractmethod
-    def stop(self) -> None: ...
+    def stop(self) -> None:
+        """Signal the gateway to stop its serving loop."""
 
 
 class GatewayManager:
+    """Runs a set of gateways concurrently on daemon threads and shuts them down together."""
+
     def __init__(self, gateways: Optional[list[Gateway]] = None):
         self.gateways: list[Gateway] = list(gateways or [])
         self._threads: list[threading.Thread] = []
         self._running = False
 
     def add(self, gw: Gateway) -> None:
+        """Append a gateway to the managed set."""
         self.gateways.append(gw)
 
     def start_all(self, runtime: Runtime) -> None:
+        """Start every managed gateway on its own daemon thread."""
         self._running = True
         for gw in self.gateways:
             t = threading.Thread(target=gw.start, args=(runtime,), daemon=True, name=gw.name)
@@ -45,6 +53,7 @@ class GatewayManager:
             self._threads.append(t)
 
     def stop_all(self) -> None:
+        """Stop every gateway and join its thread (best-effort, 2s timeout each)."""
         self._running = False
         for gw in self.gateways:
             try:

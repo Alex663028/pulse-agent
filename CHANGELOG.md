@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-07-13
+
+### Added
+- CONTRIBUTING.md with development setup, coding standards, commit convention, and PR flow.
+- Dockerfile for containerized deployment (python:3.11-slim based).
+- Makefile with common targets (install, test, coverage, lint, clean, docker).
+- 54 new tests covering compactor, session_index, hub, tools/base, provider, cron edges, doctor, settings, skills_cli.
+
+### Improved
+- Test coverage: 66% → 73% (96 tests total, up from 42).
+- Docstring coverage: 19% → 75% (200/265 definitions documented).
+- Exception handling: 28 bare `except Exception` → 15 (remaining are in error classifier and last-resort guards).
+- Exception specificity: plugin loader, telegram gateway, skill registry, subagent pool now catch specific exceptions (ImportError, URLError, OSError, etc.).
+
 ## [0.0.2] — 2026-07-13
 
 ### Fixed

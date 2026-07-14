@@ -22,6 +22,8 @@ BUNDLED_DIR = Path(__file__).resolve().parent / "bundled"
 
 
 class PluginInfo:
+    """Metadata for a discovered plugin: name, path, description and enabled flag."""
+
     def __init__(self, name: str, path: Path, description: str = "", enabled: bool = True):
         self.name = name
         self.path = path
@@ -30,11 +32,14 @@ class PluginInfo:
 
 
 class PluginLoader:
+    """Discovers and activates plugins from the bundled and user plugin directories."""
+
     def __init__(self, plugins_dir: Path):
         self.plugins_dir = Path(plugins_dir)
         self.plugins: dict[str, PluginInfo] = {}
 
     def discover(self) -> list[PluginInfo]:
+        """Scan both bundled and user plugin dirs and return the list of discovered plugins (with descriptions parsed from source)."""
         self.plugins.clear()
         for base in (BUNDLED_DIR, self.plugins_dir):
             if not base.exists():
@@ -55,12 +60,13 @@ class PluginLoader:
                             if line.strip().startswith("description"):
                                 desc = line.split('"', 2)[1] if '"' in line else ""
                                 break
-                    except Exception:
+                    except (OSError, UnicodeDecodeError):
                         pass
                     self.plugins[name] = PluginInfo(name=name, path=mod_path, description=desc)
         return list(self.plugins.values())
 
     def activate(self, runtime: Runtime, names: Optional[list[str]] = None) -> list[str]:
+        """Import and register the named plugins (or all if ``names`` is None); returns the list of successfully activated names."""
         self.discover()
         activated: list[str] = []
         for name in (names or list(self.plugins.keys())):
@@ -72,7 +78,7 @@ class PluginLoader:
                 if hasattr(mod, "register"):
                     mod.register(runtime)
                 activated.append(name)
-            except Exception as e:  # noqa: BLE001
+            except (ImportError, SyntaxError, AttributeError) as e:  # noqa: BLE001
                 logger.warning(f"plugin '{name}' failed: {e}")
         return activated
 

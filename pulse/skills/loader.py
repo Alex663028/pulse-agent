@@ -24,6 +24,8 @@ SkillStatus = Literal["candidate", "promoted", "quarantined", "deprecated"]
 
 @dataclass
 class SkillRecord:
+    """In-memory representation of a skill, with frontmatter, body and runtime metadata."""
+
     id: str
     name: str
     path: Path
@@ -36,14 +38,17 @@ class SkillRecord:
 
     @property
     def description(self) -> str:
+        """Return the description from the skill frontmatter (empty if absent)."""
         return self.frontmatter.get("description", "")
 
     @property
     def title(self) -> str:
+        """Return a human-readable title, defaulting to the skill name."""
         return self.frontmatter.get("title", self.name)
 
     @property
     def keywords(self) -> list[str]:
+        """Derive trigger keywords from the name and description tokens."""
         desc = self.description.lower()
         # name tokens + salient words from description
         toks = set(self.name.split("-"))
@@ -53,6 +58,7 @@ class SkillRecord:
 
 
 def parse_skill_md(text: str) -> tuple[dict, str]:
+    """Split a SKILL.md source into (frontmatter_dict, body) tuples; whole text becomes body if no frontmatter."""
     m = FRONTMATTER_RE.match(text)
     if not m:
         # No frontmatter: treat whole file as body with a derived name.
@@ -64,6 +70,7 @@ def parse_skill_md(text: str) -> tuple[dict, str]:
 
 
 def load_skill_dir(path: Path) -> SkillRecord:
+    """Load a SkillRecord from a directory containing a SKILL.md file."""
     path = Path(path)
     skill_md = path / "SKILL.md"
     if not skill_md.exists():

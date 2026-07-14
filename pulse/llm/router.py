@@ -12,6 +12,8 @@ from pulse.llm.provider import LLMError, LLMMessage, LLMProvider, LLMResponse
 
 
 class Router:
+    """Routes chat calls to a primary provider, walking a fallback chain on ``LLMError``."""
+
     def __init__(self, primary: LLMProvider, fallbacks: Optional[list[LLMProvider]] = None):
         self.primary = primary
         self.fallbacks = list(fallbacks or [])
@@ -23,6 +25,7 @@ class Router:
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResponse:
+        """Try the primary then each fallback; raises ``LLMError`` only if every provider fails."""
         last_err: Optional[Exception] = None
         for idx, provider in enumerate([self.primary, *self.fallbacks]):
             try:
@@ -35,4 +38,5 @@ class Router:
 
     @property
     def model(self) -> str:
+        """Return the model identifier of the primary provider."""
         return self.primary.model

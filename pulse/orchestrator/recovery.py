@@ -24,6 +24,8 @@ T = TypeVar("T")
 
 
 class ErrorClass:
+    """Sentinel string constants for classified error categories."""
+
     TRANSIENT = "TRANSIENT"
     TOOL_FAIL = "TOOL_FAIL"
     CTX_OVERFLOW = "CTX_OVERFLOW"
@@ -40,6 +42,7 @@ class CtxOverflowError(Exception):
 
 
 def classify(exc: Exception) -> str:
+    """Classify an exception into one of the ``ErrorClass`` categories for recovery routing."""
     if isinstance(exc, CtxOverflowError):
         return ErrorClass.CTX_OVERFLOW
     if isinstance(exc, LLMError):
@@ -56,6 +59,8 @@ def classify(exc: Exception) -> str:
 
 @dataclass
 class RetryPolicy:
+    """Retry bounds for the ``guarded`` wrapper: attempts, base delay, jitter, and injectable sleep."""
+
     max_attempts: int = 4
     base_delay: float = 0.2
     jitter: float = 0.1

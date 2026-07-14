@@ -31,6 +31,7 @@ def _est(text: str) -> int:
 
 
 def default_runner(rt: Runtime):
+    """Build a default ``Runner`` that evaluates a skill by chatting with ``rt.router``."""
     def run(skill, task: str) -> RunOutcome:
         try:
             resp = rt.router.chat(
@@ -40,13 +41,14 @@ def default_runner(rt: Runtime):
                 ]
             )
             return RunOutcome(success=bool(resp.content.strip()), tokens=resp.usage.total or _est(resp.content), steps=1)
-        except Exception:
+        except (RuntimeError, OSError, ValueError):
             return RunOutcome(success=False, tokens=0, steps=1)
 
     return run
 
 
 def cmd_list(rt: Runtime) -> None:
+    """Print the table of registered skills."""
     rows = rt.registry.list()
     if not rows:
         console.print("[yellow]No skills found. Install one or run a task to evolve one.[/yellow]")
@@ -62,11 +64,13 @@ def cmd_list(rt: Runtime) -> None:
 
 
 def cmd_install(rt: Runtime, location: str) -> None:
+    """Install a skill from ``location`` (path or git URL) and print the result."""
     name = install_skill(rt.registry, location, rt.settings)
     console.print(f"[green]✓ Installed skill:[/green] {name}")
 
 
 def cmd_eval(rt: Runtime, name: str, golden: Optional[str], baseline: Optional[str]) -> None:
+    """Evaluate ``name`` against golden tasks (optional ``baseline``), apply the decision and print the report."""
     rec = rt.registry.get(name)
     if not rec:
         console.print(f"[red]Skill not found:[/red] {name}")
@@ -88,6 +92,7 @@ def cmd_eval(rt: Runtime, name: str, golden: Optional[str], baseline: Optional[s
 
 
 def cmd_promote(rt: Runtime, name: str) -> None:
+    """Snapshot ``name`` and mark it as promoted."""
     rec = rt.registry.get(name)
     if not rec:
         console.print(f"[red]Skill not found:[/red] {name}")
@@ -98,6 +103,7 @@ def cmd_promote(rt: Runtime, name: str) -> None:
 
 
 def cmd_rollback(rt: Runtime, name: str, to_version: Optional[str]) -> None:
+    """Roll the skill ``name`` back to ``to_version`` (or the latest promoted) and print the result."""
     rec = do_rollback(rt.registry, name, to_version)
     if rec:
         console.print(f"[green]✓ Rolled back:[/green] {name} -> {rec.version} (status=promoted)")

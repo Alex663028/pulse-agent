@@ -14,6 +14,7 @@ from pulse.skills.registry import SkillRegistry
 
 
 def bump_version(version: str, level: str = "patch") -> str:
+    """Increment a semver ``version`` string at the given level (``major``/``minor``/``patch``)."""
     m = re.match(r"(\d+)\.(\d+)\.(\d+)", version or "0.0.0")
     maj, min_, pat = (int(x) for x in (m.groups() if m else (0, 0, 0)))
     if level == "major":

@@ -29,6 +29,8 @@ EvalDecision = str  # "promote" | "quarantine" | "rollback" | "deprecate" | "ref
 
 @dataclass
 class RunOutcome:
+    """Outcome of a single golden-task run: success flag, token and step cost."""
+
     success: bool
     tokens: int = 0
     steps: int = 0
@@ -36,6 +38,8 @@ class RunOutcome:
 
 @dataclass
 class EvalResult:
+    """Aggregated metrics and decision for a candidate skill across golden tasks."""
+
     skill_name: str
     runs: int
     success_rate: float
@@ -57,6 +61,8 @@ REGRESSION_DELTA = 0.15  # success drop vs baseline that triggers rollback/quara
 
 
 class SkillEvaluator:
+    """Evaluates candidate skills against golden tasks and produces a reversible decision."""
+
     def __init__(self, registry: SkillRegistry, min_success_rate: float = MIN_SUCCESS_RATE):
         self.registry = registry
         self.min_success_rate = min_success_rate
@@ -68,6 +74,7 @@ class SkillEvaluator:
         golden_tasks: list[str],
         baseline: Optional[SkillRecord] = None,
     ) -> EvalResult:
+        """Run ``candidate`` against each golden task via ``runner`` and produce an EvalResult, optionally comparing to ``baseline``."""
         outcomes = [runner(candidate, t) for t in golden_tasks]
         success = [o.success for o in outcomes]
         sr = sum(success) / len(success) if success else 0.0

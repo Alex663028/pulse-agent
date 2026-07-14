@@ -45,6 +45,7 @@ def run_init(
     api_key: str | None = None,
     non_interactive: bool = False,
 ) -> Settings:
+    """Interactive (or non-interactive) wizard that configures provider/model/keys and persists settings."""
     console.print("[bold cyan]Pulse init[/bold cyan] — configure your agent\n")
 
     if provider is None:

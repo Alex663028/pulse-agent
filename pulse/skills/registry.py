@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+import yaml
+
 from pulse.config.settings import Settings
 from pulse.skills.loader import SkillRecord, SkillStatus, load_skill_dir
 from pulse.skills.states import DECISION_TO_STATUS
@@ -19,6 +21,8 @@ BUNDLED_DIR = Path(__file__).resolve().parent / "bundled"
 
 
 class SkillRegistry:
+    """Discover, index and manage skills from bundled + user + hub sources."""
+
     def __init__(self, settings: Settings, storage: Storage):
         self.settings = settings
         self.storage = storage
@@ -26,6 +30,7 @@ class SkillRegistry:
         self.discover()
 
     def discover(self) -> None:
+        """Re-scan all skill roots and rebuild the in-memory index, restoring last-known statuses."""
         self._index.clear()
         roots = [BUNDLED_DIR, self.settings.skills_dir]
         for root in roots:
@@ -36,7 +41,7 @@ class SkillRegistry:
                 if child.is_dir() and (child / "SKILL.md").exists():
                     try:
                         rec = load_skill_dir(child)
-                    except Exception:
+                    except (OSError, yaml.YAMLError, KeyError):
                         continue
                     # restore last known status from storage if present
                     last = self.storage.latest_eval(f"{rec.name}@{rec.version}")
@@ -46,15 +51,18 @@ class SkillRegistry:
 
     # ---- progressive access ----
     def list(self) -> list[dict]:
+        """Return lightweight summary dicts (name, title, description, status, version) for all skills."""
         return [
             {"name": r.name, "title": r.title, "description": r.description, "status": r.status, "version": r.version}
             for r in self._index.values()
         ]
 
     def get(self, name: str) -> Optional[SkillRecord]:
+        """Look up a skill record by name; returns None if not present."""
         return self._index.get(name)
 
     def names(self) -> list[str]:
+        """Return all registered skill names."""
         return list(self._index.keys())
 
     # ---- mutation ----
@@ -72,6 +80,7 @@ class SkillRegistry:
         return record
 
     def update_status(self, name: str, status: SkillStatus, metrics: Optional[dict] = None) -> None:
+        """Update a skill's status (and merge metrics), persisting the new version snapshot."""
         rec = self._index.get(name)
         if not rec:
             return

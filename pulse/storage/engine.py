@@ -60,6 +60,8 @@ def _now() -> str:
 
 
 class Storage:
+    """SQLite-backed storage for sessions, trajectories, evals, skill versions and FTS5 memory."""
+
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -70,6 +72,7 @@ class Storage:
 
     @staticmethod
     def has_fts5() -> bool:
+        """Return True if the SQLite build supports the FTS5 full-text extension."""
         try:
             con = sqlite3.connect(":memory:")
             con.execute("CREATE VIRTUAL TABLE t USING fts5(x)")
@@ -88,6 +91,7 @@ class Storage:
 
     # ---- sessions & trajectories ----
     def store_session(self, sid: str, summary: Optional[str] = None, token_usage: int = 0) -> None:
+        """Insert or replace a session row with its summary and token usage."""
         with self._tx():
             self._conn.execute(
                 "INSERT OR REPLACE INTO sessions(id, created_at, summary, token_usage) VALUES(?,?,?,?)",
@@ -102,6 +106,7 @@ class Storage:
         used_skills: list[str],
         data: dict[str, Any],
     ) -> None:
+        """Persist a completed execution trajectory with skills used and outcome flag."""
         with self._tx():
             self._conn.execute(
                 "INSERT INTO trajectories(id, session_id, created_at, outcome, used_skills, data) VALUES(?,?,?,?,?,?)",
@@ -112,6 +117,7 @@ class Storage:
     def record_eval(
         self, run_id: str, skill_id: str, baseline_id: Optional[str], decision: str, metrics: dict[str, Any]
     ) -> None:
+        """Insert an eval-run row capturing the decision and metrics for a skill."""
         with self._tx():
             self._conn.execute(
                 "INSERT INTO eval_runs(id, skill_id, baseline_id, created_at, decision, metrics) VALUES(?,?,?,?,?,?)",
@@ -119,6 +125,7 @@ class Storage:
             )
 
     def latest_eval(self, skill_id: str) -> Optional[dict[str, Any]]:
+        """Return the most recent eval row for ``skill_id`` (with parsed metrics), or None."""
         row = self._conn.execute(
             "SELECT * FROM eval_runs WHERE skill_id=? ORDER BY created_at DESC LIMIT 1", (skill_id,)
         ).fetchone()
@@ -130,6 +137,7 @@ class Storage:
     def save_skill_version(
         self, skill_name: str, version: str, path: Optional[str], status: str, metrics: dict[str, Any]
     ) -> None:
+        """Insert or replace a skill_version row keyed by ``skill_name@version``."""
         with self._tx():
             self._conn.execute(
                 "INSERT OR REPLACE INTO skill_versions(id, skill_name, version, path, status, created_at, metrics) VALUES(?,?,?,?,?,?,?)",
@@ -137,6 +145,7 @@ class Storage:
             )
 
     def skill_versions(self, skill_name: str) -> list[dict[str, Any]]:
+        """Return all stored versions for ``skill_name``, newest first, with parsed metrics."""
         rows = self._conn.execute(
             "SELECT * FROM skill_versions WHERE skill_name=? ORDER BY created_at DESC", (skill_name,)
         ).fetchall()
@@ -150,6 +159,7 @@ class Storage:
         skill: Optional[str] = None,
         limit: int = 500,
     ) -> list[dict[str, Any]]:
+        """Query trajectories filtered by timestamp, outcome and/or skill usage."""
         clauses = []
         params: list[Any] = []
         if since:
@@ -170,6 +180,7 @@ class Storage:
 
     # ---- memory FTS5 ----
     def index_memory(self, session_id: str, content: str) -> None:
+        """Insert a memory blob into both the fallback table and the FTS5 index."""
         with self._tx():
             self._conn.execute(
                 "INSERT INTO fts_memory(session_id, content, ts) VALUES(?,?,?)", (session_id, content, _now())
@@ -179,6 +190,7 @@ class Storage:
             )
 
     def search_memory(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Full-text search over indexed memory; falls back to substring scan if FTS5 is unavailable."""
         if not self.has_fts5():
             # graceful degradation: substring scan
             rows = self._conn.execute("SELECT * FROM fts_memory ORDER BY ts DESC").fetchall()
@@ -191,4 +203,5 @@ class Storage:
         return [dict(r) for r in rows]
 
     def close(self) -> None:
+        """Close the underlying SQLite connection."""
         self._conn.close()

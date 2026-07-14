@@ -23,6 +23,7 @@ _PATTERNS = [
 
 
 def extract_facts(text: str) -> list[str]:
+    """Extract stable self-descriptive facts from ``text`` via heuristic patterns; de-duplicates preserving order."""
     facts: list[str] = []
     low = text.lower()
     for pat in _PATTERNS:
@@ -40,14 +41,18 @@ def extract_facts(text: str) -> list[str]:
 
 
 class UserProfile:
+    """Heuristic user-profile manager that ingests facts into USER.md."""
+
     def __init__(self, store: MemoryStore):
         self.store = store
 
     def ingest(self, text: str) -> list[str]:
+        """Extract facts from ``text`` and append them to USER.md; returns the ingested facts."""
         facts = extract_facts(text)
         for f in facts:
             self.store.add_user_fact(f)
         return facts
 
     def render(self) -> str:
+        """Return the current USER.md contents."""
         return self.store.read_user()

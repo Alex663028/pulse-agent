@@ -19,6 +19,8 @@ from typing import Callable, Optional
 
 @dataclass
 class Job:
+    """A scheduled job: name, interval (s) and/or cron expression, callable, and runtime stats."""
+
     name: str
     interval: float = 0  # seconds (used when cron_expr is empty)
     cron_expr: str = ""  # "min hour day month weekday" or "" for simple interval
@@ -36,6 +38,8 @@ class Job:
 
 @dataclass
 class JobRun:
+    """A single execution record of a job: timing, success flag and optional error."""
+
     job_name: str
     started: float
     elapsed: float
@@ -130,6 +134,8 @@ def parse_natural(desc: str) -> tuple[float, str]:
 
 
 class Scheduler:
+    """Background scheduler supporting interval jobs, 5-field cron expressions and pause/resume."""
+
     def __init__(self, history: Optional[list[JobRun]] = None):
         self._jobs: dict[str, Job] = {}
         self._history: list[JobRun] = list(history or [])
@@ -138,16 +144,19 @@ class Scheduler:
         self._lock = threading.Lock()
 
     def add(self, name: str, interval: float, fn: Callable[[], None], cron_expr: str = "") -> Job:
+        """Register a job to fire every ``interval`` seconds (or per ``cron_expr``); returns the Job."""
         job = Job(name=name, interval=interval, fn=fn, cron_expr=cron_expr, last_run=time.time())
         with self._lock:
             self._jobs[name] = job
         return job
 
     def remove(self, name: str) -> None:
+        """Remove the named job (no-op if absent)."""
         with self._lock:
             self._jobs.pop(name, None)
 
     def pause(self, name: str) -> bool:
+        """Pause a job; returns True if the job was found and paused."""
         with self._lock:
             j = self._jobs.get(name)
             if j:
@@ -156,6 +165,7 @@ class Scheduler:
         return False
 
     def resume(self, name: str) -> bool:
+        """Resume a paused job and reset its last_run so it fires next tick; returns True if found."""
         with self._lock:
             j = self._jobs.get(name)
             if j:
@@ -165,14 +175,17 @@ class Scheduler:
         return False
 
     def list(self) -> list[Job]:
+        """Return a snapshot of all registered jobs."""
         with self._lock:
             return list(self._jobs.values())
 
     @property
     def history(self) -> list[JobRun]:
+        """Return a copy of the job execution history."""
         return list(self._history)
 
     def start(self) -> None:
+        """Start the background scheduler thread (no-op if already running)."""
         if self._thread is not None:
             return
         self._active = True
@@ -180,6 +193,7 @@ class Scheduler:
         self._thread.start()
 
     def stop(self) -> None:
+        """Signal the scheduler loop to stop and join the background thread (3s timeout)."""
         self._active = False
         if self._thread:
             self._thread.join(timeout=3)

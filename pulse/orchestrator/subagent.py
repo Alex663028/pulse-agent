@@ -24,6 +24,8 @@ from pulse.tools.registry import ToolRegistry
 
 @dataclass
 class SubagentTask:
+    """Specification of a single sub-agent task: id, description, role, budget and injected context."""
+
     id: str
     description: str
     role: str = "builder"
@@ -34,6 +36,8 @@ class SubagentTask:
 
 @dataclass
 class SubagentResult:
+    """Outcome of a single sub-agent execution: success, answer, token/elapsed cost and optional error."""
+
     task_id: str
     success: bool
     answer: str = ""
@@ -59,6 +63,7 @@ class SubagentPool:
         primary: LLMProvider,
         tools: Optional[ToolRegistry] = None,
     ) -> list[SubagentResult]:
+        """Execute all ``tasks`` in parallel and collect results with timeout/error isolation."""
         results: list[SubagentResult] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as ex:
             futures = {ex.submit(self._exec_one, t, primary, tools): t for t in tasks}
@@ -87,7 +92,7 @@ class SubagentPool:
         tool_schemas = tools.schemas() if tools else None
         try:
             resp: LLMResponse = primary.chat(messages, tools=tool_schemas)
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError) as e:
             return SubagentResult(task_id=task.id, success=False, error=str(e), elapsed=time.time() - t0)
         return SubagentResult(
             task_id=task.id,
@@ -128,7 +133,7 @@ def decompose(task: str, llm: Optional[LLMProvider] = None) -> list[str]:
             lines = re.findall(r"\d+\.\s*(.+?)(?:\n|$)", resp.content or "")
             if len(lines) >= 2:
                 return [l.strip() for l in lines if l.strip()]
-        except Exception:
+        except (RuntimeError, OSError):
             pass
     # deterministic heuristic fallback
     for sep in _HEURISTIC_SPLITTERS:
@@ -166,5 +171,5 @@ def merge_results(task: str, results: list[SubagentResult], llm: LLMProvider) ->
             max_tokens=2000,
         )
         return resp.content or merged
-    except Exception:
+    except (RuntimeError, OSError):
         return merged

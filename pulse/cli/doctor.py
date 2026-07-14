@@ -12,6 +12,7 @@ Check = NamedTuple("Check", [("name", str), ("ok", bool), ("detail", str)])
 
 
 def run_doctor(settings: Settings) -> list[Check]:
+    """Run a series of self-checks (Python, config, FTS5, storage, dirs, provider) and return the results."""
     checks: list[Check] = []
     checks.append(Check("python>=3.11", sys.version_info >= (3, 11), f"{sys.version_info.major}.{sys.version_info.minor}"))
 

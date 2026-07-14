@@ -35,12 +35,16 @@ def _est(text: str) -> int:
 
 @dataclass
 class OrchestratorConfig:
+    """Tunables for the orchestration loop (max iterations, self-evolution toggle)."""
+
     max_iterations: int = 8
     auto_evolve: bool = True
 
 
 @dataclass
 class TaskResult:
+    """Final outcome of an orchestration run: answer, trajectory, tokens and optional error."""
+
     success: bool
     answer: str = ""
     used_skills: list[str] = field(default_factory=list)
@@ -60,6 +64,8 @@ SYSTEM_PROMPT = (
 
 
 class Orchestrator:
+    """Core agent loop tying LLM, memory, skills, tools and storage behind recovery + budget guardrails."""
+
     def __init__(
         self,
         router: Router,
@@ -94,11 +100,15 @@ class Orchestrator:
         return sum(_est(m.content) + sum(_est(tc.arguments.__str__()) for tc in m.tool_calls) for m in messages)
 
     def run(self, task: str, session_id: Optional[str] = None) -> TaskResult:
+        """Run ``task`` to completion (or until max iterations), returning a TaskResult."""
         sid = session_id or f"sess:{uuid4().hex[:12]}"
         self.obs.emit("session_start", session=sid, task=task[:200])
         self.storage.index_memory(sid, task)
 
-        skills = select_skills(self.registry, task, llm=self.router.primary if self.settings.model.provider == "mock" else None)
+        try:
+            skills = select_skills(self.registry, task, llm=self.router.primary if self.settings.model.provider == "mock" else None)
+        except Exception:  # skill selection is non-critical — proceed without
+            skills = []
         for s in skills:
             self.obs.skill_activated(s.name)
 

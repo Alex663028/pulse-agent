@@ -23,6 +23,7 @@ def _naive_compact(text: str, keep_tokens: int) -> str:
 
 
 def compact(text: str, keep_tokens: int, llm: Optional[LLMProvider] = None) -> str:
+    """Compress ``text`` to ~``keep_tokens``; uses LLM summarization when available, else extractive fallback."""
     if llm is not None:
         try:
             resp = llm.chat(
@@ -38,6 +39,6 @@ def compact(text: str, keep_tokens: int, llm: Optional[LLMProvider] = None) -> s
             )
             if resp.content:
                 return resp.content
-        except Exception:
+        except (RuntimeError, OSError):
             pass
     return _naive_compact(text, keep_tokens)

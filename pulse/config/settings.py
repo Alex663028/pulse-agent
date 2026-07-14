@@ -19,14 +19,18 @@ DEFAULT_BASE_URL = "http://localhost:11434/v1"
 
 
 def default_config_dir() -> Path:
+    """Return the Pulse config directory (``$PULSE_HOME`` or ``~/.pulse``)."""
     return Path(os.environ.get("PULSE_HOME", Path.home() / ".pulse"))
 
 
 def default_data_dir(cfg: Optional[Path] = None) -> Path:
+    """Return the data directory under ``cfg`` (or the default config dir)."""
     return (cfg or default_config_dir()) / "data"
 
 
 class ModelSettings(BaseModel):
+    """Provider/model/base_url and fallback configuration."""
+
     provider: str = DEFAULT_PROVIDER
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_BASE_URL
@@ -40,6 +44,8 @@ class ModelSettings(BaseModel):
 
 
 class Settings(BaseModel):
+    """Top-level application settings: paths, model config, auto-evolution and session limits."""
+
     config_dir: Path = Field(default_factory=default_config_dir)
     model: ModelSettings = Field(default_factory=ModelSettings)
     api_key_env: str = ""
@@ -49,25 +55,31 @@ class Settings(BaseModel):
 
     @property
     def data_dir(self) -> Path:
+        """Return the data directory (``<config_dir>/data``)."""
         return self.config_dir / "data"
 
     @property
     def skills_dir(self) -> Path:
+        """Return the skills directory (``<data_dir>/skills``)."""
         return self.data_dir / "skills"
 
     @property
     def memory_dir(self) -> Path:
+        """Return the memories directory (``<data_dir>/memories``)."""
         return self.data_dir / "memories"
 
     @property
     def db_path(self) -> Path:
+        """Return the SQLite database path (``<data_dir>/pulse.db``)."""
         return self.data_dir / "pulse.db"
 
     @property
     def env_path(self) -> Path:
+        """Return the ``.env`` path under the config dir."""
         return self.config_dir / ".env"
 
     def ensure_dirs(self) -> None:
+        """Create the config, data, skills and memory directories if missing."""
         for d in (self.config_dir, self.data_dir, self.skills_dir, self.memory_dir):
             d.mkdir(parents=True, exist_ok=True)
 

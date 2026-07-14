@@ -29,6 +29,8 @@ def _get(url: str) -> dict:
 
 
 class TelegramGateway(Gateway):
+    """Polls the Telegram Bot API long-poll endpoint and routes messages through the orchestrator."""
+
     name = "telegram"
 
     def __init__(self, token: str = ""):
@@ -37,9 +39,11 @@ class TelegramGateway(Gateway):
         self._offset = 0
 
     def _call(self, method: str, data: dict | None = None) -> dict:
+        """Invoke a Telegram Bot API ``method`` with optional JSON payload and return the parsed response."""
         return _post(API.format(token=self._token, method=method), data or {})
 
     def start(self, runtime: Runtime) -> None:
+        """Resolve the bot token, then run a long-poll loop dispatching messages through ``runtime``."""
         token = self._token or runtime.settings.config_dir
         if not self._token:
             # try env
@@ -60,7 +64,7 @@ class TelegramGateway(Gateway):
         while self._active:
             try:
                 updates = self._call("getUpdates", {"offset": self._offset, "timeout": 30})
-            except Exception as e:
+            except (urllib.error.URLError, OSError, KeyError, ValueError) as e:
                 time.sleep(3)
                 continue
             for upd in updates.get("result", []):
@@ -75,7 +79,7 @@ class TelegramGateway(Gateway):
                 self._call("sendChatAction", {"chat_id": chat_id, "action": "typing"})
                 try:
                     res = runtime.orchestrator.run(text)
-                except Exception as e:
+                except (RuntimeError, OSError, ValueError) as e:
                     self._send(chat_id, f"error: {e}")
                     continue
                 if res.success:
@@ -90,7 +94,7 @@ class TelegramGateway(Gateway):
         for chunk in self._chunks(text, 4000):
             try:
                 self._call("sendMessage", {"chat_id": chat_id, "text": chunk})
-            except Exception:
+            except (urllib.error.URLError, OSError):
                 pass
 
     @staticmethod
@@ -120,4 +124,5 @@ class TelegramGateway(Gateway):
         return out or [text[:size]]
 
     def stop(self) -> None:
+        """Signal the polling loop to exit."""
         self._active = False

@@ -32,6 +32,10 @@ def propose_skill(
     skills_dir: Path,
     llm: Optional[LLMProvider] = None,
 ) -> SkillRecord:
+    """Distill a successful trajectory into a candidate skill written under ``skills_dir/<name>/SKILL.md``.
+
+    An optional ``llm`` refines the prose draft; failures fall back to the template body.
+    """
     name = _slug(task)
     skills_dir = Path(skills_dir)
     dest = skills_dir / name
@@ -55,7 +59,7 @@ def propose_skill(
             )
             if resp.content:
                 body = resp.content
-        except Exception:
+        except (RuntimeError, OSError):
             pass
 
     fm = {

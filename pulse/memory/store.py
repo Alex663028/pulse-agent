@@ -18,6 +18,8 @@ DEFAULT_USER = "# USER\n\nUser profile: role, preferences, and recurring workflo
 
 
 class MemoryStore:
+    """File-backed memory (MEMORY.md + USER.md) layered on FTS5-indexed SQLite."""
+
     def __init__(self, settings: Settings, storage: Storage):
         self.settings = settings
         self.storage = storage
@@ -26,6 +28,7 @@ class MemoryStore:
         self.ensure()
 
     def ensure(self) -> None:
+        """Create the memory directory and seed default MEMORY.md / USER.md files if missing."""
         self.settings.memory_dir.mkdir(parents=True, exist_ok=True)
         if not self.memory_path.exists():
             self.memory_path.write_text(DEFAULT_MEMORY, encoding="utf-8")
@@ -34,9 +37,11 @@ class MemoryStore:
 
     # ---- notes (MEMORY.md) ----
     def read_memory(self) -> str:
+        """Return the full MEMORY.md contents."""
         return self.memory_path.read_text(encoding="utf-8")
 
     def add_note(self, text: str, index: bool = True) -> None:
+        """Append a bullet note to MEMORY.md and (optionally) index it for FTS5 recall."""
         text = text.strip()
         if not text:
             return
@@ -47,9 +52,11 @@ class MemoryStore:
 
     # ---- user profile (USER.md) ----
     def read_user(self) -> str:
+        """Return the full USER.md contents."""
         return self.user_path.read_text(encoding="utf-8")
 
     def add_user_fact(self, fact: str) -> None:
+        """Append a bullet fact to USER.md (no-op on empty input)."""
         fact = fact.strip()
         if not fact:
             return
@@ -58,4 +65,5 @@ class MemoryStore:
 
     # ---- recall ----
     def recall(self, query: str, limit: int = 10) -> list[dict[str, str]]:
+        """Full-text search over indexed memory via the underlying storage layer."""
         return self.storage.search_memory(query, limit=limit)

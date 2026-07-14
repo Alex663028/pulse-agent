@@ -17,6 +17,8 @@ from pulse.tools.registry import ToolRegistry
 
 @dataclass
 class Runtime:
+    """Container of wired-up services (settings, storage, memory, registry, tools, router, orchestrator) used by CLI/gateway commands."""
+
     settings: Settings
     storage: Storage
     memory: MemoryStore
@@ -28,6 +30,7 @@ class Runtime:
 
 
 def bootstrap(config_dir=None) -> Runtime:
+    """Construct and wire together all Pulse services into a single ``Runtime`` instance."""
     settings = load_settings(config_dir)
     storage = Storage(settings.db_path)
     memory = MemoryStore(settings, storage)

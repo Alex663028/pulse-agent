@@ -21,6 +21,8 @@ from typing import Any, Optional
 
 @dataclass
 class ToolCall:
+    """A single LLM-issued tool call: id, function name and parsed arguments."""
+
     id: str
     name: str
     arguments: dict[str, Any]
@@ -28,6 +30,8 @@ class ToolCall:
 
 @dataclass
 class LLMMessage:
+    """A chat message in the OpenAI-compatible format (system/user/assistant/tool)."""
+
     role: str  # system | user | assistant | tool
     content: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
@@ -35,6 +39,7 @@ class LLMMessage:
     tool_call_id: Optional[str] = None
 
     def to_openai(self) -> dict[str, Any]:
+        """Render this message as an OpenAI API payload dict (including tool_calls when present)."""
         msg: dict[str, Any] = {"role": self.role, "content": self.content or ""}
         if self.role == "tool":
             msg["tool_call_id"] = self.tool_call_id
@@ -53,16 +58,21 @@ class LLMMessage:
 
 @dataclass
 class Usage:
+    """Token accounting for a single LLM response."""
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
 
     @property
     def total(self) -> int:
+        """Total tokens used (prompt + completion)."""
         return self.prompt_tokens + self.completion_tokens
 
 
 @dataclass
 class LLMResponse:
+    """A normalized LLM response: content, tool_calls, model name, usage and finish_reason."""
+
     content: str
     tool_calls: list[ToolCall] = field(default_factory=list)
     model: str = ""
@@ -75,6 +85,8 @@ class LLMError(Exception):
 
 
 class LLMProvider(ABC):
+    """Abstract base for all LLM providers (chat returns a normalized ``LLMResponse``)."""
+
     name: str = "base"
 
     @abstractmethod
@@ -85,7 +97,7 @@ class LLMProvider(ABC):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResponse:
-        ...
+        """Run a chat completion against the underlying model and return a normalized ``LLMResponse``."""
 
 
 def _estimate_tokens(text: str) -> int:
@@ -116,6 +128,7 @@ class OpenAICompatProvider(LLMProvider):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResponse:
+        """Send messages to the OpenAI-compatible endpoint and parse the response into ``LLMResponse`` (raises ``LLMError`` on transport failures)."""
         payload: dict[str, Any] = {
             "model": kwargs.pop("model", self.model),
             "messages": [m.to_openai() for m in messages],
@@ -175,6 +188,7 @@ class MockProvider(LLMProvider):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResponse:
+        """Return a scripted/deterministic response, optionally emitting a tool call hinted by ``[call:name]`` in the user turn."""
         self.calls.append(list(messages))
         last_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
         if self.scripted:

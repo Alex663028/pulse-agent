@@ -27,6 +27,8 @@ def _wrap(text: str, width: int = 80) -> str:
 
 
 class TuiGateway(Gateway):
+    """Interactive Rich-powered terminal chat gateway with slash commands."""
+
     name = "tui"
 
     def __init__(self):
@@ -34,6 +36,7 @@ class TuiGateway(Gateway):
         self._console = Console()
 
     def start(self, runtime: Runtime) -> None:
+        """Run the interactive REPL: prompt → orchestrator → render results, until /quit or EOF."""
         from pulse.skills.states import DECISION_TO_STATUS
 
         self._active = True
@@ -69,6 +72,7 @@ class TuiGateway(Gateway):
         self._active = False
 
     def stop(self) -> None:
+        """Signal the REPL loop to exit on the next iteration."""
         self._active = False
 
     def _handle_slash(self, raw: str, runtime: Runtime, console: Console) -> None:
