@@ -1,9 +1,10 @@
 # Pulse — Hermes-style Self-improving AI Agent (Reliability-First)
 
-[![Tests](https://img.shields.io/badge/tests-42%20passed-brightgreen)](https://github.com)
-[![Python](https://img.shields.io/badge/python-3.11+-blue)](https://python.org)
+[![CI](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-66%25-yellow)](https://github.com/Alex663028/pulse-agent)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Lines](https://img.shields.io/badge/code-4500%2B%20lines-blue)](https://github.com)
+[![Release](https://img.shields.io/badge/release-v0.0.1-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.0.1)
 
 A **self-improving personal AI agent** rebuilt from the ground up — inspired by
 [Nous Research's Hermes Agent](https://github.com/nousresearch/hermes-agent),
