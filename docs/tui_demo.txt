@@ -1,0 +1,20 @@
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ [1;36mPulse — Self-improving AI Agent[0m                                              │
+╰────────────────────────── type /help for commands ───────────────────────────╯
+[2;33mmemory[0m[2m=[0m[2;35m107B[0m[2m  [0m[2;33mskills[0m[2m=[0m[1;2;36m1[0m[2m  [0m[2;33mprovider[0m[2m=[0m[2;35mmock[0m
+[3m           Slash Commands            [0m
+┏━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃[1m [0m[1mCommand[0m[1m [0m┃[1m [0m[1mDescription            [0m[1m [0m┃
+┡━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│[32m [0m[32m/help  [0m[32m [0m│ Show this help          │
+│[32m [0m[32m/skills[0m[32m [0m│ List available skills   │
+│[32m [0m[32m/memory[0m[32m [0m│ View memory notes       │
+│[32m [0m[32m/model [0m[32m [0m│ Show current model info │
+│[32m [0m[32m/clear [0m[32m [0m│ Clear session context   │
+│[32m [0m[32m/quit  [0m[32m [0m│ Exit TUI                │
+└─────────┴─────────────────────────┘
+
+[1;32mYou:[0m write a Python function to sort a list
+[1;34mPulse:[0m Here is a function that sorts a list:
+[2m  def [0m[1;2;35msort_list[0m[1;2m([0m[2mlst[0m[1;2m)[0m[2m:[0m
+[2m      return [0m[1;2;35msorted[0m[1;2m([0m[2mlst[0m[1;2m)[0m

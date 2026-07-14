@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-14
+
+### Added — P2: Plugin sandbox, security, benchmarks, docs
+- **Plugin sandbox** (`pulse/plugins/sandbox.py`): import isolation via `sys.meta_path` finder + `sys.modules` cache eviction; restricted `__builtins__` (removes `open`, `eval`, `exec`, `compile`); permission whitelist system (`tools.register`, `memory.read/write`, `network`, etc.); plugins declare `__permissions__` in source; bundled plugins get full permissions, user plugins get conservative defaults.
+- **`.env` chmod 600**: API key files are now created with `0o600` permissions; `load_env()` warns if permissions are too open.
+- **Benchmark suite** (`scripts/benchmark.py`): measures orchestrator latency, token consumption, sub-agent throughput, skill evaluation speed, and memory recall latency. Supports `--quick`, `--json`, and `--bench` flags.
+- **Mermaid diagrams** in README: architecture flowchart, skill evaluation state machine, multi-agent team pipeline.
+- **TUI demo** screenshot in README.
+- 11 new sandbox tests (96 → 107 total).
+
+### Improved
+- Plugin loader now parses `__permissions__` from source without execution and passes permissions to sandbox.
+- `load_env()` detects and warns about overly permissive `.env` file permissions.
+
 ## [0.1.0] — 2026-07-13
 
 ### Added

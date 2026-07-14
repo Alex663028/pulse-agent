@@ -1,4 +1,6 @@
 """description="Reports current weather for a city (mock)" """
+__permissions__ = ["tools.register", "memory.write"]
+
 from pulse.tools.base import Tool, ToolResult
 
 

@@ -4,7 +4,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-73%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.1.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.1.0)
+[![Release](https://img.shields.io/badge/release-v0.2.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.2.0)
 
 A **self-improving personal AI agent** with a reliability-first core.
 Compatible with the [agentskills.io](https://agentskills.io) open standard.
@@ -23,7 +23,7 @@ Compatible with the [agentskills.io](https://agentskills.io) open standard.
 | **Multi-agent orchestration** | Sub-agent parallel pool with failure isolation + result merge; Builder→Reviewer→Ship team pipeline |
 | **Dialectic user modeling** | Self-hosted replacement for Honcho — thesis → antithesis → synthesis profiling with versioned rollbacks |
 | **Agentskills.io compatible** | Load and run skills from the ecosystem without modification |
-| **Plugin system** | Dynamic discovery and activation; plugins can register tools, skills, and lifecycle hooks |
+| **Plugin sandbox** | Import isolation + permission whitelist; plugins declare `__permissions__` and run in restricted execution context |
 | **RL training data pipeline** | Export execution trajectories in ChatML JSONL or ShareGPT format for fine-tuning |
 | **Cron scheduling** | Natural-language scheduling (`"every 5 min"`, `"daily at 8am"`) + standard cron expressions + pause/resume with execution history |
 
@@ -58,18 +58,101 @@ pulse chat "hello world"
 
 ## Architecture
 
+```mermaid
+graph TD
+    CLI["CLI (Typer + Rich)"] --> ORCH["Orchestrator"]
+    ORCH --> LLM["LLM Adapter"]
+    ORCH --> MEM["Memory"]
+    ORCH --> SKILLS["Skills"]
+    ORCH --> TOOLS["Tools / MCP"]
+    ORCH --> OBS["Observability"]
+
+    LLM --> P["OpenAI-compat / Anthropic / Ollama / Mock"]
+    LLM --> ROUTER["Router (primary + fallback chain)"]
+
+    MEM --> FTS5["SQLite FTS5"]
+    MEM --> DIALECTIC["Dialectic Profiling"]
+    MEM --> COMPACTOR["Context Compactor"]
+
+    SKILLS --> LOADER["agentskills.io Loader"]
+    SKILLS --> EVAL["Evaluation Loop"]
+    SKILLS --> VERSION["Versioning (semver)"]
+
+    TOOLS --> BUILTIN["Built-in Tools"]
+    TOOLS --> PLUGINS["Plugin Registry"]
+    TOOLS --> SANDBOX["Plugin Sandbox"]
+
+    PLUGINS --> SANDBOX
+
+    ORCH --> SUB["Sub-agent Pool"]
+    ORCH --> TEAM["Team Pipeline"]
+    ORCH --> CRON["Scheduler"]
+    ORCH --> RL["RL Export"]
+
+    subgraph Reliability Layer
+        RECOVERY["Error Recovery"]
+        BUDGET["Token Budget"]
+        OBS
+    end
+
+    ORCH --> RECOVERY
+    ORCH --> BUDGET
+
+    style CLI fill:#0891b2,color:#fff
+    style ORCH fill:#7c3aed,color:#fff
+    style RELIABILITY_LAYER fill:#f59e0b,color:#000
 ```
-CLI (Typer + Rich) → Orchestrator (ReAct / recovery / token budget / observability)
-  ├── LLM adapter  (OpenAI-compat / Anthropic / Ollama / Mock)
-  ├── Memory       (MEMORY.md + USER.md + SQLite FTS5 + dialectic profiling)
-  ├── Skills       (agentskills.io loader + evaluation loop + versioning)
-  ├── Tools / MCP  (built-in tools + plugin registry)
-  ├── Gateways     (TUI + Telegram + CLI)
-  ├── Scheduler    (cron expressions + natural-language scheduling)
-  ├── Sub-agents   (parallel pool + failure isolation + result merge)
-  ├── Team         (Builder → Reviewer → Ship pipeline)
-  ├── Plugins      (dynamic discovery + activation)
-  └── RL export    (ChatML JSONL + ShareGPT format)
+
+### Skill Evaluation State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> candidate: skill proposed
+    candidate --> promoted: eval pass (≥60% success)
+    candidate --> deprecated: eval fail
+    promoted --> quarantined: eval regression (>15% drop)
+    promoted --> promoted: rollback (restore version)
+    quarantined --> promoted: rollback (restore version)
+    deprecated --> [*]
+    quarantined --> [*]: deprecate
+```
+
+### Multi-Agent Team Pipeline
+
+```mermaid
+graph LR
+    TASK["Complex Task"] --> BUILDER["Builder Agent(s)"]
+    BUILDER --> REVIEWER["Reviewer Agent"]
+    REVIEWER -->|pass| SHIP["Ship"]
+    REVIEWER -->|refine| BUILDER
+    SHIP --> RESULT["Final Result"]
+```
+
+---
+
+## TUI Demo
+
+```
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Pulse — Self-improving AI Agent                                              │
+╰────────────────────────── type /help for commands ───────────────────────────╯
+memory=107B  skills=1  provider=mock
+           Slash Commands
+┏━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Command ┃ Description             ┃
+┡━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ /help   │ Show this help          │
+│ /skills │ List available skills   │
+│ /memory │ View memory notes       │
+│ /model  │ Show current model info │
+│ /clear  │ Clear session context   │
+│ /quit   │ Exit TUI                │
+└─────────┴─────────────────────────┘
+
+You: write a Python function to sort a list
+Pulse: Here is a function that sorts a list:
+  def sort_list(lst):
+      return sorted(lst)
 ```
 
 ---
@@ -129,12 +212,6 @@ pulse skills install https://github.com/user/some-skill.git
 
 ## Skill Evaluation Loop (the key differentiator)
 
-```
-candidate ──eval(pass)──▶ promoted ──eval(regress)──▶ quarantined
-    │                          │                            │
-    └──eval(fail)──▶ deprecated ◀──rollback──promoted ◀─────┘
-```
-
 Every self-evolved skill MUST pass a golden-task replay before promotion.
 Promotions and rollbacks are explicit, reversible, and versioned.
 
@@ -146,17 +223,57 @@ pulse skills rollback my-skill --to 1.0.0  # revert to a previous version
 
 ---
 
+## Plugin Sandbox
+
+Plugins run in an isolated execution context:
+
+- **Import whitelist** — only safe stdlib + pulse public API modules allowed
+- **Restricted builtins** — `open`, `eval`, `exec`, `compile`, `__import__` removed
+- **Permission system** — plugins declare `__permissions__ = ["tools.register", "memory.read"]`
+
+```python
+# example plugin with sandbox
+__permissions__ = ["tools.register"]
+
+from pulse.tools.base import Tool, ToolResult
+
+class MyTool(Tool):
+    name = "my_tool"
+    # ...
+
+def register(runtime):
+    runtime.tools.register(MyTool())
+```
+
+---
+
 ## Running Tests
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q   # 96 tests, all pass
+python -m pytest -q   # 107 tests, all pass
 ```
 
 Tests cover: agentskills.io skill loading | evaluation loop (promote/deprecate/rollback) |
 error classification + retry | context budget overflow | orchestrator fault tolerance |
-sub-agent pool + error isolation | plugin discovery + activation | dialectic profiling |
-RL trajectory export | team orchestration.
+sub-agent pool + error isolation | plugin discovery + activation (sandbox) |
+dialectic profiling | RL trajectory export | team orchestration.
+
+---
+
+## Benchmarks
+
+```bash
+python scripts/benchmark.py --quick
+```
+
+| Benchmark | Metric | Mock (typical) |
+|---|---|---|
+| Orchestrator latency | mean | ~100ms |
+| Token consumption | mean/task | ~24 tokens |
+| Sub-agent throughput | tasks/sec (4 workers) | ~7,000 |
+| Skill evaluation | mean | ~0.04ms |
+| Memory recall (FTS5) | mean | ~0.37ms |
 
 ---
 
@@ -167,6 +284,9 @@ RL trajectory export | team orchestration.
 - [x] **M3** — Sub-agent parallel pool + cron enhancement
 - [x] **M4** — RL trajectory export + dialectic user modeling
 - [x] **M5** — Plugin system + multi-agent team orchestration
+- [x] **P0** — Version consistency, CI/CD, real badges, CHANGELOG
+- [x] **P1** — Test coverage boost, exception narrowing, docstrings, CONTRIBUTING/Docker/Makefile
+- [x] **P2** — Plugin sandbox, .env chmod 600, benchmark scripts, Mermaid diagrams + TUI screenshots
 
 ---
 

@@ -116,13 +116,29 @@ def save_settings(s: Settings) -> Path:
 
 
 def load_env(s: Settings) -> dict[str, str]:
-    """Load API keys from ``.env`` into a dict (does not touch os.environ)."""
+    """Load API keys from ``.env`` into a dict (does not touch os.environ).
+
+    If the file has overly permissive permissions (anything beyond 0o600),
+    a warning is logged but loading continues.
+    """
     env: dict[str, str] = {}
-    if s.env_path.exists():
-        for line in s.env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            env[k.strip()] = v.strip().strip('"').strip("'")
+    if not s.env_path.exists():
+        return env
+    # Warn if .env permissions are too open.
+    try:
+        st = s.env_path.stat()
+        if st.st_mode & 0o077:  # any group/other access bits
+            import logging
+            logging.getLogger("pulse.config").warning(
+                f"Permissions on {s.env_path} are too open ({oct(st.st_mode)[-3:]}). "
+                f"Consider running: chmod 600 {s.env_path}"
+            )
+    except OSError:
+        pass
+    for line in s.env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        env[k.strip()] = v.strip().strip('"').strip("'")
     return env

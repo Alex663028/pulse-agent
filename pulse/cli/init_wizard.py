@@ -6,7 +6,9 @@ This is the UX fix for Hermes' steep onboarding curve.
 """
 from __future__ import annotations
 
+import os
 import urllib.request
+from pathlib import Path
 
 from rich.console import Console
 from rich.prompt import Prompt
@@ -94,6 +96,7 @@ def run_init(
 
 
 def _write_env(settings: Settings, key: str, value: str) -> None:
+    """Persist an environment variable to ``.env`` with restricted permissions (0o600)."""
     settings.config_dir.mkdir(parents=True, exist_ok=True)
     path = settings.config_dir / ".env"
     lines = []
@@ -102,3 +105,16 @@ def _write_env(settings: Settings, key: str, value: str) -> None:
     lines = [ln for ln in lines if not ln.startswith(f"{key}=")]
     lines.append(f"{key}={value}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Restrict permissions: owner read/write only (API keys are secrets).
+    _chmod_restrict(path)
+
+
+def _chmod_restrict(path: Path) -> None:
+    """Set file permissions to 0o600 (owner read/write only).
+
+    On non-POSIX systems (e.g. Windows) this is a no-op.
+    """
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass  # Non-POSIX or permission denied — best effort.
