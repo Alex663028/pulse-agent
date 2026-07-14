@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.2] — 2026-07-13
+
 ### Fixed
-- Version number inconsistency: `pyproject.toml` and `pulse/__init__.py` now report `0.0.1` (was `0.1.0`), matching the release tag.
+- Version number inconsistency: `pyproject.toml` and `pulse/__init__.py` now report `0.0.2`, matching the release tag.
 
 ### Added
 - GitHub Actions CI workflow (`.github/workflows/ci.yml`): runs pytest + coverage on Python 3.11/3.12, uploads to Codecov, plus ruff lint.

@@ -10,5 +10,5 @@ Compatible with the agentskills.io open standard and Hermes' extended skill
 format, so existing ecosystem skills can be reused directly.
 """
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 __codename__ = "Pulse"
