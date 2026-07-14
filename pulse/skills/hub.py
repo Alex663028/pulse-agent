@@ -13,7 +13,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from pulse.config.settings import Settings
-from pulse.skills.loader import load_skill_dir
 from pulse.skills.registry import SkillRegistry
 
 

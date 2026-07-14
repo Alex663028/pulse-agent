@@ -14,11 +14,10 @@ from __future__ import annotations
 import concurrent.futures
 import re
 import time
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Optional
 
 from pulse.llm.provider import LLMMessage, LLMProvider, LLMResponse
-from pulse.llm.router import Router
 from pulse.tools.registry import ToolRegistry
 
 
@@ -132,7 +131,7 @@ def decompose(task: str, llm: Optional[LLMProvider] = None) -> list[str]:
             )
             lines = re.findall(r"\d+\.\s*(.+?)(?:\n|$)", resp.content or "")
             if len(lines) >= 2:
-                return [l.strip() for l in lines if l.strip()]
+                return [line.strip() for line in lines if line.strip()]
         except (RuntimeError, OSError):
             pass
     # deterministic heuristic fallback

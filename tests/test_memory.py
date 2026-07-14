@@ -3,8 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pulse.memory.store import MemoryStore
-from pulse.memory.user_profile import UserProfile, extract_facts
+from pulse.memory.user_profile import UserProfile
 from tests._helpers import make_runtime
 
 

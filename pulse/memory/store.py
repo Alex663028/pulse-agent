@@ -6,8 +6,6 @@ additionally indexed in local SQLite FTS5 for cross-session recall.
 """
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
 from uuid import uuid4
 
 from pulse.config.settings import Settings

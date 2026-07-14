@@ -7,7 +7,6 @@ This is the UX fix for Hermes' steep onboarding curve.
 from __future__ import annotations
 
 import urllib.request
-from pathlib import Path
 
 from rich.console import Console
 from rich.prompt import Prompt

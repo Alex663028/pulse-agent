@@ -6,7 +6,6 @@ Uses only the stdlib + ``requests`` (no heavy framework).
 from __future__ import annotations
 
 import json
-import textwrap
 import time
 import urllib.request
 import urllib.error
@@ -44,7 +43,6 @@ class TelegramGateway(Gateway):
 
     def start(self, runtime: Runtime) -> None:
         """Resolve the bot token, then run a long-poll loop dispatching messages through ``runtime``."""
-        token = self._token or runtime.settings.config_dir
         if not self._token:
             # try env
             import os
@@ -64,7 +62,7 @@ class TelegramGateway(Gateway):
         while self._active:
             try:
                 updates = self._call("getUpdates", {"offset": self._offset, "timeout": 30})
-            except (urllib.error.URLError, OSError, KeyError, ValueError) as e:
+            except (urllib.error.URLError, OSError, KeyError, ValueError):
                 time.sleep(3)
                 continue
             for upd in updates.get("result", []):

@@ -5,9 +5,7 @@ import uuid
 from pathlib import Path
 
 from pulse.skills.loader import SkillRecord, load_skill_dir
-from pulse.skills.registry import SkillRegistry
 from pulse.skills.versioning import bump_version, rollback, snapshot
-from pulse.storage.engine import Storage
 from tests._helpers import make_runtime
 
 

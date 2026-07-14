@@ -4,7 +4,6 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-import pytest
 
 from pulse.gateways.base import Gateway, GatewayManager
 from pulse.gateways.telegram import TelegramGateway

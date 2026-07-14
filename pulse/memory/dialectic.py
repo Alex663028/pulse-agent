@@ -14,7 +14,6 @@ inspect the reasoning trail and roll back at any time.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Optional
 
 from pulse.llm.provider import LLMMessage, LLMProvider

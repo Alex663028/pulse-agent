@@ -5,7 +5,6 @@ import json
 import os
 import uuid
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,9 +13,9 @@ from pulse.memory.compactor import compact
 from pulse.memory.session_index import SessionIndex
 from pulse.scheduler.cron import Job, Scheduler, _cron_matches, parse_natural
 from pulse.skills.hub import install_skill
-from pulse.skills.loader import SkillRecord, dump_skill_md, load_skill_dir, parse_skill_md
+from pulse.skills.loader import SkillRecord, dump_skill_md, parse_skill_md
 from pulse.storage.engine import Storage
-from pulse.tools.base import CalcTool, ListDirTool, ReadFileTool, ToolResult
+from pulse.tools.base import CalcTool, ListDirTool, ReadFileTool
 from tests._helpers import make_runtime
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 from pulse.skills.evaluator import RunOutcome, SkillEvaluator
 from pulse.skills.loader import SkillRecord, load_skill_dir
@@ -38,7 +37,9 @@ def test_evaluator_promotes_when_successful():
     cand = _candidate()
     rt.registry._index[cand.name] = cand
     ev = SkillEvaluator(rt.registry)
-    runner = lambda s, t: RunOutcome(success=True, tokens=100, steps=1)
+
+    def runner(s, t):
+        return RunOutcome(success=True, tokens=100, steps=1)
     res = ev.evaluate(cand, runner, ["task a", "task b", "task c"])
     ev.apply(res, cand)
     assert res.decision == "promote"
@@ -50,7 +51,9 @@ def test_evaluator_deprecates_when_poor():
     cand = _candidate()
     rt.registry._index[cand.name] = cand
     ev = SkillEvaluator(rt.registry)
-    runner = lambda s, t: RunOutcome(success=False, tokens=10, steps=1)
+
+    def runner(s, t):
+        return RunOutcome(success=False, tokens=10, steps=1)
     res = ev.evaluate(cand, runner, ["task a", "task b", "task c"])
     assert res.decision in ("deprecate", "quarantine", "refine")
     assert res.success_rate < 0.6
@@ -70,7 +73,9 @@ def test_evaluator_rollback_on_regression():
     rt.registry._index[cand.name] = cand
     ev = SkillEvaluator(rt.registry)
     # regressed vs baseline but still clears the min bar -> rollback
-    runner = lambda s, t: RunOutcome(success=t != "t3", tokens=10, steps=1)
+
+    def runner(s, t):
+        return RunOutcome(success=t != "t3", tokens=10, steps=1)
     res = ev.evaluate(cand, runner, ["t1", "t2", "t3"], baseline=base)
     assert res.decision == "rollback"
     assert res.baseline_success_rate == 1.0

@@ -6,10 +6,9 @@ snapshot. Version bumps follow semver (patch by default).
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import Optional
 
-from pulse.skills.loader import SkillRecord, dump_skill_md, load_skill_dir
+from pulse.skills.loader import SkillRecord, dump_skill_md
 from pulse.skills.registry import SkillRegistry
 
 

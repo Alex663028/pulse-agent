@@ -77,7 +77,7 @@ def cmd_eval(rt: Runtime, name: str, golden: Optional[str], baseline: Optional[s
         return
     tasks = BUILTIN_GOLDEN
     if golden and Path(golden).exists():
-        tasks = [l.strip() for l in Path(golden).read_text(encoding="utf-8").splitlines() if l.strip()]
+        tasks = [line.strip() for line in Path(golden).read_text(encoding="utf-8").splitlines() if line.strip()]
     base_rec = rt.registry.get(baseline) if baseline else None
     evaluator = SkillEvaluator(rt.registry)
     result = evaluator.evaluate(rec, default_runner(rt), tasks, base_rec)

@@ -4,7 +4,6 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-import pytest
 
 from pulse.cli.doctor import run_doctor
 from pulse.cli.skills_cli import cmd_list, cmd_eval, cmd_promote, cmd_rollback, default_runner, BUILTIN_GOLDEN

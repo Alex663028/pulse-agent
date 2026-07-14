@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from pulse.config.settings import ModelSettings, Settings
-from pulse.llm.config import build_router
 from pulse.llm.provider import LLMError, LLMMessage, MockProvider
 from pulse.llm.router import Router
 from pulse.memory.store import MemoryStore

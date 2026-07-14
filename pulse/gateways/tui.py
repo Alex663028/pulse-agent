@@ -37,8 +37,6 @@ class TuiGateway(Gateway):
 
     def start(self, runtime: Runtime) -> None:
         """Run the interactive REPL: prompt → orchestrator → render results, until /quit or EOF."""
-        from pulse.skills.states import DECISION_TO_STATUS
-
         self._active = True
         console = self._console
         console.print(Panel.fit(BANNER.strip(), border_style="cyan"))
