@@ -4,12 +4,18 @@ Every plugin module runs inside a restricted execution context:
 - Only explicitly allowed built-in functions are available.
 - Only safe standard-library and ``pulse`` public-API modules can be imported.
 - Plugins declare required permissions via ``__permissions__: list[str]``.
+
+The protection is layered:
+1. ``__builtins__`` is replaced with a restricted dict (no ``open/eval/exec``).
+2. ``sys.meta_path`` finder intercepts imports of denied modules.
+3. ``sys.modules`` cache is selectively evicted for denied modules (except
+   modules that the import system itself needs to function, such as ``sys``,
+   ``builtins``, ``importlib``).
 """
 
 from __future__ import annotations
 
 import builtins as _builtins
-import importlib
 import importlib.util
 import logging
 import sys
@@ -21,8 +27,8 @@ logger = logging.getLogger("pulse.plugins.sandbox")
 
 # ---------------------------------------------------------------------------
 # Allowed builtins — read-only / side-effect-free / pure-computation.
-# Deliberately excluded: open, compile, eval, exec, __import__, breakpoint,
-# exit, quit, help, input.
+# Deliberately excluded: open, compile, eval, exec, breakpoint, exit, quit,
+# help, input.
 # ---------------------------------------------------------------------------
 SAFE_BUILTINS: set[str] = {
     # Types
@@ -111,7 +117,6 @@ ALLOWED_MODULE_PREFIXES: tuple[str, ...] = (
 )
 
 # Python internal modules required for importlib to function.
-# These are low-level C modules that importlib needs to load any source file.
 PYTHON_INTERNAL_MODULES: set[str] = {
     "_io",
     "_frozen_importlib",
@@ -177,6 +182,37 @@ DENIED_MODULES: set[str] = {
     "platform",
 }
 
+# Modules that MUST remain in ``sys.modules`` for the import system itself
+# to function. The sandbox keeps them in the cache; protection is enforced
+# at the ``__builtins__`` and ``sys.meta_path`` layer.
+ESSENTIAL_MODULES: frozenset[str] = frozenset({
+    "sys",
+    "builtins",
+    "_imp",
+    "_thread",
+    "_frozen_importlib",
+    "_frozen_importlib_external",
+    "_io",
+    "importlib",
+    "importlib._bootstrap",
+    "importlib._bootstrap_external",
+    "importlib.machinery",
+    "importlib.abc",
+    "_abc",
+    "_collections_abc",
+    "_stat",
+    "_warnings",
+    "codecs",
+    "encodings",
+    "encodings.utf_8",
+    "encodings.latin_1",
+    "encodings.aliases",
+    "abc",
+    "genericpath",
+    "posixpath",
+    "ntpath",
+})
+
 # ---------------------------------------------------------------------------
 # Permission names (declared by plugins via ``__permissions__``).
 # ---------------------------------------------------------------------------
@@ -237,8 +273,14 @@ def _make_safe_builtins() -> dict[str, Any]:
 class SandboxImportHook:
     """Import hook that enforces the module whitelist during plugin execution.
 
-    Uses ``sys.meta_path`` (inserted at position 0) so denied modules are
-    blocked *before* ``sys.modules`` cache lookup or any other finder.
+    Combines three protection layers:
+    1. ``sys.meta_path`` finder (using modern ``find_spec`` API) — intercepts
+       imports of denied modules before any other finder runs.
+    2. ``sys.modules`` cache eviction (except for essential modules) — prevents
+       ``import os`` from returning a cached module.
+    3. ``__builtins__`` restriction — replaces ``open/eval/exec/compile`` with
+       stubs that raise ``PermissionError``.
+
     Install via :func:`install_sandbox_hook` and remove with
     :func:`remove_sandbox_hook`.
     """
@@ -251,9 +293,10 @@ class SandboxImportHook:
         """Activate the sandbox import hook."""
         if self._active:
             return
-        # Evict denied modules from sys.modules cache so they cannot be
-        # imported via cache. Stash them for restoration on remove().
+        # Evict denied modules from sys.modules cache (except essentials).
         for mod_name in list(sys.modules.keys()):
+            if mod_name in ESSENTIAL_MODULES:
+                continue
             if not _module_allowed(mod_name):
                 self._stashed[mod_name] = sys.modules.pop(mod_name, None)
         sys.meta_path.insert(0, self)  # type: ignore[arg-type]
@@ -274,16 +317,41 @@ class SandboxImportHook:
         self._stashed.clear()
         self._active = False
 
+    def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> Any:
+        """Modern meta path finder (Python 3.4+ recommended API).
+
+        Returns a spec whose loader raises ``ImportError`` for denied modules,
+        or None for allowed modules (letting the next finder handle them).
+        """
+        if _module_allowed(fullname):
+            return None
+        import importlib.machinery
+        spec = importlib.machinery.ModuleSpec(fullname, self, is_package=False)
+        return spec
+
     def find_module(self, fullname: str, path: Any = None) -> Any:
-        """Meta path finder — block denied modules, return None for allowed ones."""
+        """Legacy meta path finder (Python < 3.4 compatibility)."""
         if not _module_allowed(fullname):
-            # Return self as a loader that always raises ImportError.
             return self
-        # Return None to let the next finder handle it.
         return None
 
+    def create_module(self, spec: Any) -> Any:
+        """Loader.create_module — return None to use importlib's default module creation.
+
+        Returning None avoids recursion that would happen if we called
+        ``importlib.util.module_from_spec`` (which re-enters the import system).
+        """
+        return None
+
+    def exec_module(self, module: Any) -> None:
+        """Loader.exec_module — raise ImportError for denied modules."""
+        raise ImportError(
+            f"Plugin sandbox: import of '{module.__name__}' is not allowed. "
+            f"Use __permissions__ to request additional access."
+        )
+
     def load_module(self, fullname: str) -> Any:
-        """Loader that raises ImportError for denied modules."""
+        """Legacy loader (Python < 3.4) — raise ImportError for denied modules."""
         raise ImportError(
             f"Plugin sandbox: import of '{fullname}' is not allowed. "
             f"Use __permissions__ to request additional access."
