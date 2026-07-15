@@ -75,6 +75,11 @@ class Settings(BaseModel):
         return self.data_dir / "skills"
 
     @property
+    def plugins_dir(self) -> Path:
+        """Return the plugins directory (``<config_dir>/plugins``)."""
+        return self.config_dir / "plugins"
+
+    @property
     def memory_dir(self) -> Path:
         """Return the memories directory (``<data_dir>/memories``)."""
         return self.data_dir / "memories"
