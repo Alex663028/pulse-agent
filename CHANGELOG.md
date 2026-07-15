@@ -31,9 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Stats
 - 23 MCP/doctor tests (client, adapter, manager, CLI round-trip, lazy connect, reconnect, validation, health). 107 → 130 total.
 
-### Fixed
-- `load_settings()` now carries the requested `config_dir` through when a `config.yaml` already exists, so subsequent `save_settings()` writes to the correct location (previously reverted to the default `~/.pulse` and silently dropped changes).
-
 ## [0.2.0] — 2026-07-14
 
 ### Added — P2: Plugin sandbox, security, benchmarks, docs

@@ -4,7 +4,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-73%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.2.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.2.0)
+[![Release](https://img.shields.io/badge/release-v0.3.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.3.0)
 
 A **self-improving personal AI agent** with a reliability-first core.
 Compatible with the [agentskills.io](https://agentskills.io) open standard.
