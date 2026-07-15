@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from pulse.config.settings import Settings, load_settings
 from pulse.llm.config import build_router
@@ -27,10 +28,17 @@ class Runtime:
     router: Router
     obs: Observability
     orchestrator: Orchestrator
+    mcp: Any = None
 
 
-def bootstrap(config_dir=None) -> Runtime:
-    """Construct and wire together all Pulse services into a single ``Runtime`` instance."""
+def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
+    """Construct and wire together all Pulse services into a single ``Runtime`` instance.
+
+    ``load_mcp`` controls whether configured MCP servers are started and their
+    tools registered. It defaults to False so cheap commands (init, doctor,
+    config inspection) don't spin up subprocesses; interactive commands pass
+    True to make external MCP tools available to the orchestrator.
+    """
     settings = load_settings(config_dir)
     storage = Storage(settings.db_path)
     memory = MemoryStore(settings, storage)
@@ -40,4 +48,14 @@ def bootstrap(config_dir=None) -> Runtime:
     router = build_router(settings)
     obs = Observability()
     orch = Orchestrator(router, memory, registry, tools, storage, settings, obs)
-    return Runtime(settings, storage, memory, registry, tools, router, obs, orch)
+    rt = Runtime(settings, storage, memory, registry, tools, router, obs, orch)
+
+    manager = None
+    if load_mcp and settings.mcp_servers:
+        from pulse.mcp import MCPManager
+
+        manager = MCPManager(tools)
+        manager.load_servers(settings.mcp_servers)
+        rt.mcp = manager
+
+    return rt

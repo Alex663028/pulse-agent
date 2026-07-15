@@ -43,6 +43,15 @@ class ModelSettings(BaseModel):
     max_tokens: int = 4096
 
 
+class MCPServerConfig(BaseModel):
+    """Configuration for a single MCP (Model Context Protocol) stdio server."""
+
+    name: str
+    command: str
+    args: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+
 class Settings(BaseModel):
     """Top-level application settings: paths, model config, auto-evolution and session limits."""
 
@@ -52,6 +61,7 @@ class Settings(BaseModel):
     auto_evolve: bool = True
     max_session_tokens: int = 12000
     log_level: str = "INFO"
+    mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
 
     @property
     def data_dir(self) -> Path:
@@ -95,7 +105,13 @@ def load_settings(config_dir: Optional[Path] = None) -> Settings:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     # Pull nested model settings.
     model_raw = raw.pop("model", {}) or {}
-    settings = Settings(**{k: v for k, v in raw.items() if k in Settings.model_fields})
+    # IMPORTANT: carry the requested config dir through — otherwise the new
+    # Settings object silently reverts to the default ~/.pulse and any later
+    # save_settings() would write to the wrong location.
+    settings = Settings(
+        config_dir=cfg,
+        **{k: v for k, v in raw.items() if k in Settings.model_fields},
+    )
     if model_raw:
         merged = settings.model.model_dump()
         merged.update({k: v for k, v in model_raw.items() if k in ModelSettings.model_fields})

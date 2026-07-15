@@ -43,4 +43,25 @@ def run_doctor(settings: Settings) -> list[Check]:
     else:
         checks.append(Check(f"provider={settings.model.provider}", True, "cloud (API key in .env)"))
 
+    # MCP servers — try to connect and list tools (skip if none configured)
+    if settings.mcp_servers:
+        from pulse.mcp import MCPClient, MCPError
+
+        for srv in settings.mcp_servers:
+            if not srv.enabled:
+                checks.append(Check(f"mcp:{srv.name}", True, "disabled"))
+                continue
+            try:
+                client = MCPClient(command=srv.command, args=list(srv.args), timeout=4.0)
+                client.start()
+                specs = client.list_tools()
+                client.stop()
+                checks.append(
+                    Check(f"mcp:{srv.name}", True, f"{len(specs)} tool(s)")
+                )
+            except MCPError as e:
+                checks.append(Check(f"mcp:{srv.name}", False, f"connection failed: {e}"))
+            except Exception as e:  # noqa: BLE001
+                checks.append(Check(f"mcp:{srv.name}", False, f"error: {e}"))
+
     return checks

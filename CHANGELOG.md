@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-15
+
+### Added — MCP (Model Context Protocol) integration
+- **Lightweight MCP stdio client** (`pulse/mcp/client.py`): newline-delimited JSON-RPC 2.0 over subprocess stdin/stdout, `initialize` handshake + `notifications/initialized`, `tools/list`, `tools/call`. No hard dependency on the official `mcp` SDK.
+- **Tool adapter** (`MCPTool`): wraps any MCP server tool as a first-class `Tool`, normalizing results to `ToolResult`; names are prefixed `{server}__{tool}` to avoid collisions.
+- **Manager** (`MCPManager`): starts enabled servers, registers their tools into the global `ToolRegistry`, skips disabled/broken servers gracefully.
+- **CLI** (`pulse mcp list|add|remove|test|export`): full lifecycle management of MCP server configs (persisted in `config.yaml`, secrets stay in `.env`).
+- **Runtime integration**: `bootstrap(load_mcp=True)` automatically connects configured servers for `chat`, `tui`, `serve`, `fork`, `team`.
+- **`pulse doctor`** now probes each enabled MCP server (reachability + tool count).
+- 14 new tests (client init/list/call, adapter, manager, CLI round-trip, config_dir regression). 107 → 121 total.
+
+### Fixed
+- `load_settings()` now carries the requested `config_dir` through when a `config.yaml` already exists, so subsequent `save_settings()` writes to the correct location (previously reverted to the default `~/.pulse` and silently dropped changes).
+
 ## [0.2.0] — 2026-07-14
 
 ### Added — P2: Plugin sandbox, security, benchmarks, docs

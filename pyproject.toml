@@ -1,6 +1,6 @@
 [project]
 name = "pulse-agent"
-version = "0.2.0"
+version = "0.3.0"
 description = "Pulse — a Hermes-style self-improving personal AI agent, rebuilt with a lightweight core: reliability-first orchestration, an evaluated skill self-evolution loop, and zero-config local hosting."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -9,7 +9,7 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "pyyaml>=6.0",
-    "pydantic-settings>=2.2",
+    "pydantic>=2.2",
     "openai>=1.30",
 ]
 

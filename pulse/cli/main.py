@@ -38,6 +38,9 @@ app.add_typer(skills_app, name="skills")
 app.add_typer(cron_app, name="cron")
 app.add_typer(rl_app, name="rl")
 app.add_typer(plugin_app, name="plugin")
+
+mcp_app = typer.Typer(help="Manage Model Context Protocol (MCP) servers.")
+app.add_typer(mcp_app, name="mcp")
 console = Console()
 
 # persistent cron store (JSON file in config dir)
@@ -93,7 +96,7 @@ def chat(
     session: str = typer.Option(None, help="resume a session id"),
 ):
     """Run a task through the orchestrator."""
-    rt = bootstrap()
+    rt = bootstrap(load_mcp=True)
     with console.status("[cyan]Thinking…[/cyan]"):
         res = rt.orchestrator.run(task, session_id=session)
     if res.used_skills:
@@ -112,7 +115,7 @@ def tui():
     """Start interactive terminal chat."""
     from pulse.gateways.tui import TuiGateway
 
-    TuiGateway().start(bootstrap())
+    TuiGateway().start(bootstrap(load_mcp=True))
 
 
 @app.command()
@@ -126,7 +129,7 @@ def serve(
     from pulse.gateways.tui import TuiGateway
     from pulse.scheduler.cron import Scheduler
 
-    rt = bootstrap()
+    rt = bootstrap(load_mcp=True)
     mgr = GatewayManager()
     if tui_flag:
         mgr.add(TuiGateway())
@@ -173,7 +176,7 @@ def fork(
         merge_results,
     )
 
-    rt = bootstrap()
+    rt = bootstrap(load_mcp=True)
     console.print(f"[cyan]Decomposing:[/cyan] {task[:80]}")
     subs = decompose(task, llm=rt.router.primary)
     console.print(f"[dim]{len(subs)} sub-tasks → {workers} workers[/dim]")
@@ -200,7 +203,7 @@ def team(
     """Run a multi-agent team (Builder → Reviewer → Ship)."""
     from pulse.team.orchestrator import TeamOrchestrator
 
-    rt = bootstrap()
+    rt = bootstrap(load_mcp=True)
     console.print(f"[cyan]Team running:[/cyan] {task[:80]}")
     tm = TeamOrchestrator(max_rounds=rounds, max_workers=workers)
     with console.status("[cyan]Builder agents working…[/cyan]"):
@@ -432,6 +435,68 @@ def plugin_activate(name: str = typer.Argument(..., help="plugin name to activat
         console.print(f"[green]✓ activated:[/green] {', '.join(activated)}")
     else:
         console.print(f"[red]plugin not found or failed:[/red] {name}")
+
+
+# ---- MCP commands -------------------------------------------------------
+@mcp_app.command("list")
+def mcp_list():
+    """List configured MCP servers."""
+    from pulse.cli.mcp_cli import cmd_list
+    from pulse.config.settings import load_settings
+
+    cmd_list(load_settings())
+
+
+@mcp_app.command("add")
+def mcp_add(
+    name: str = typer.Argument(..., help="unique server name, used as tool prefix"),
+    invocation: str = typer.Argument(
+        ...,
+        help='full server command as one string, e.g. "npx -y @modelcontextprotocol/server-filesystem /tmp"',
+    ),
+):
+    """Add an MCP server (stdio).
+
+    Pass the whole command (executable + args) as a single quoted string so
+    flags like ``-y`` are preserved literally instead of being parsed as CLI options.
+    """
+    import shlex
+
+    from pulse.cli.mcp_cli import cmd_add
+    from pulse.config.settings import load_settings
+
+    parts = shlex.split(invocation)
+    if not parts:
+        console.print("[red]empty command[/red]")
+        return
+    cmd_add(load_settings(), name, parts[0], parts[1:])
+
+
+@mcp_app.command("remove")
+def mcp_remove(name: str = typer.Argument(..., help="server name to remove")):
+    """Remove an MCP server config."""
+    from pulse.cli.mcp_cli import cmd_remove
+    from pulse.config.settings import load_settings
+
+    cmd_remove(load_settings(), name)
+
+
+@mcp_app.command("test")
+def mcp_test(name: str = typer.Argument(None, help="optional server name to filter")):
+    """Connect to server(s) and list exposed tools."""
+    from pulse.cli.mcp_cli import cmd_test
+    from pulse.config.settings import load_settings
+
+    cmd_test(load_settings(), name)
+
+
+@mcp_app.command("export")
+def mcp_export():
+    """Export MCP server configs as JSON."""
+    from pulse.cli.mcp_cli import cmd_export
+    from pulse.config.settings import load_settings
+
+    cmd_export(load_settings())
 
 
 if __name__ == "__main__":

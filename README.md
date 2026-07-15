@@ -26,6 +26,7 @@ Compatible with the [agentskills.io](https://agentskills.io) open standard.
 | **Plugin sandbox** | Import isolation + permission whitelist; plugins declare `__permissions__` and run in restricted execution context |
 | **RL training data pipeline** | Export execution trajectories in ChatML JSONL or ShareGPT format for fine-tuning |
 | **Cron scheduling** | Natural-language scheduling (`"every 5 min"`, `"daily at 8am"`) + standard cron expressions + pause/resume with execution history |
+| **MCP integration** | Connect any stdio Model Context Protocol server — its tools become first-class Pulse tools, zero SDK dependency |
 
 ---
 
@@ -81,6 +82,10 @@ graph TD
     TOOLS --> BUILTIN["Built-in Tools"]
     TOOLS --> PLUGINS["Plugin Registry"]
     TOOLS --> SANDBOX["Plugin Sandbox"]
+    TOOLS --> MCP["MCP Servers (stdio)"]
+
+    MCP --> MCPCLIENT["MCPClient (JSON-RPC)"]
+    MCPCLIENT --> MCPADAPT["MCPTool adapter → ToolRegistry"]
 
     PLUGINS --> SANDBOX
 
@@ -173,6 +178,7 @@ Pulse: Here is a function that sorts a list:
 | `pulse cron list\|add\|remove\|pause\|resume` | Cron job management |
 | `pulse rl export` | Export trajectories for fine-tuning (JSONL / ShareGPT) |
 | `pulse plugin list\|install\|activate` | Plugin system |
+| `pulse mcp list\|add\|remove\|test\|export` | Model Context Protocol server management |
 
 ---
 
@@ -247,11 +253,36 @@ def register(runtime):
 
 ---
 
+## Model Context Protocol (MCP)
+
+Pulse can connect to **any stdio MCP server** and expose its tools to the orchestrator — no official SDK dependency, keeping the project lightweight and self-hosted. Tools from a server named `fs` become callable as `fs__<tool>` (prefixed to avoid name collisions).
+
+```bash
+# Add a server (tools are prefixed by the name you give it).
+# Pass the whole command as one quoted string so flags like -y are preserved.
+pulse mcp add fs "npx -y @modelcontextprotocol/server-filesystem /tmp"
+
+# Verify it connects and see what tools it exposes
+pulse mcp test fs
+
+# Back up / share your server configs
+pulse mcp export > mcp-servers.json
+
+# Remove one
+pulse mcp remove fs
+```
+
+Configured servers are stored in `~/.pulse/config.yaml` (never the `.env` secrets file). Interactive commands (`chat`, `tui`, `serve`, `fork`, `team`) automatically start enabled servers and register their tools before running.
+
+`pulse doctor` also probes each enabled MCP server so you can spot a broken config at a glance.
+
+---
+
 ## Running Tests
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q   # 107 tests, all pass
+python -m pytest -q   # 120 tests, all pass
 ```
 
 Tests cover: agentskills.io skill loading | evaluation loop (promote/deprecate/rollback) |
