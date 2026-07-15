@@ -14,7 +14,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from pulse.llm.provider import LLMMessage, LLMProvider
+from pulse.llm.router import Router
 from pulse.orchestrator.subagent import (
+    RecursionContext,
     SubagentPool,
     SubagentTask,
     SubagentResult,
@@ -58,36 +60,32 @@ class TeamOrchestrator:
         self.max_rounds = max_rounds
         self.pool = SubagentPool(max_workers=max_workers)
 
-    def run(self, task: str, primary: LLMProvider, tools: Optional[ToolRegistry] = None) -> TeamResult:
-        """Run the full Builder → Reviewer pipeline for ``task``, swallowing unexpected exceptions into ``TeamResult.error``."""
+    def run(self, task: str, primary: LLMProvider, tools: Optional[ToolRegistry] = None, router: Optional[Router] = None) -> TeamResult:
+        """Run the full Builder → Reviewer pipeline for ``task``.
+
+        If ``router`` is provided, sub-agents run in recursive mode with full
+        recovery and budget support. Otherwise they use the legacy tool loop.
+        """
         try:
-            return self._run(task, primary, tools)
+            return self._run(task, primary, tools, router)
         except Exception as e:  # noqa: BLE001
             return TeamResult(task=task, success=False, error=str(e))
 
-    def _run(self, task: str, primary: LLMProvider, tools: ToolRegistry | None) -> TeamResult:
+    def _run(self, task: str, primary: LLMProvider, tools: ToolRegistry | None, router: Router | None) -> TeamResult:
         subs = decompose(task, llm=primary)
         feedback = ""
+        recursion = RecursionContext(router=router, tools=tools, max_iterations=5) if router and tools else None
         for round_n in range(1, self.max_rounds + 1):
-            # ---- BUILD (parallel) ----
             ctx = f"(the reviewer returned feedback: {feedback})" if feedback else ""
             sub_tasks = [
-                SubagentTask(
-                    id=f"b_{i}",
-                    description=s,
-                    role="builder",
-                    context=ctx,
-                )
+                SubagentTask(id=f"b_{i}", description=s, role="builder", context=ctx)
                 for i, s in enumerate(subs)
             ]
-            # Use SubagentPool for parallel execution instead of sequential calls
             builder_results: list[SubagentResult] = self.pool.run(
-                sub_tasks, primary, tools
+                sub_tasks, primary, tools, recursive=recursion,
             )
             if not builder_results:
                 break
-
-            # ---- REVIEW ----
             builder_output = "\n\n---\n\n".join(
                 f"[{r.task_id}] {'✓' if r.success else '✗'} {r.answer or r.error}"
                 for r in builder_results
@@ -105,9 +103,7 @@ class TeamOrchestrator:
                     task=task, success=True, answer=merged, rounds=round_n,
                     reviewer_notes=review, builder_results=builder_results,
                 )
-            # reviewer returned feedback → another round
             feedback = review
-        # max rounds exhausted
         merged = merge_results(task, builder_results, llm=primary)
         return TeamResult(
             task=task, success=False, answer=merged, rounds=self.max_rounds,

@@ -15,6 +15,7 @@ from pulse.orchestrator.observability import Observability
 from pulse.skills.registry import SkillRegistry
 from pulse.storage.engine import Storage
 from pulse.tools.builtin import register_builtin_tools
+from pulse.tools.loader import load_custom_tools
 from pulse.tools.registry import ToolRegistry
 
 
@@ -42,6 +43,14 @@ def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
     registry = SkillRegistry(settings, storage)
     tools = ToolRegistry()
     register_builtin_tools(tools)
+    # Load dynamic tools from ~/.pulse/tools/
+    for custom_tool in load_custom_tools():
+        tools.register(custom_tool)
+    # Load executable skills and register their tools
+    from pulse.skills.executable import load_executable_skills
+    for handle in load_executable_skills([settings.skills_dir, settings.config_dir / "skills", settings.skills_dir.parent / "skills"], tools):
+        if handle.errors:
+            logger.warning("skill '%s' failed to load: %s", handle.name, handle.errors)
     router = build_router(settings)
     obs = Observability()
     orch = Orchestrator(router, memory, registry, tools, storage, settings, obs)

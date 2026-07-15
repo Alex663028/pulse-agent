@@ -43,44 +43,34 @@ class SkillRegistry:
                         rec = load_skill_dir(child)
                     except (OSError, yaml.YAMLError, KeyError):
                         continue
-                    # restore last known status from storage if present
                     last = self.storage.latest_eval(f"{rec.name}@{rec.version}")
                     if last:
                         rec.status = DECISION_TO_STATUS.get(last.get("decision"), rec.status)
                     self._index[rec.name] = rec
 
-    # ---- progressive access ----
     def list(self) -> list[dict]:
-        """Return lightweight summary dicts (name, title, description, status, version) for all skills."""
         return [
             {"name": r.name, "title": r.title, "description": r.description, "status": r.status, "version": r.version}
             for r in self._index.values()
         ]
 
     def get(self, name: str) -> Optional[SkillRecord]:
-        """Look up a skill record by name; returns None if not present."""
         return self._index.get(name)
 
     def names(self) -> list[str]:
-        """Return all registered skill names."""
         return list(self._index.keys())
 
-    # ---- mutation ----
     def register(self, record: SkillRecord, copy_to_user: bool = True) -> SkillRecord:
-        """Register a (typically self-evolved or hub) skill, optionally copying
-        its directory into the user skills dir so it persists."""
         if copy_to_user:
             dest = self.settings.skills_dir / record.name
             if not dest.exists():
                 import shutil
-
                 shutil.copytree(record.path, dest)
                 record = load_skill_dir(dest)
         self._index[record.name] = record
         return record
 
     def update_status(self, name: str, status: SkillStatus, metrics: Optional[dict] = None) -> None:
-        """Update a skill's status (and merge metrics), persisting the new version snapshot."""
         rec = self._index.get(name)
         if not rec:
             return

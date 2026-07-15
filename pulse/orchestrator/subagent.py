@@ -6,8 +6,8 @@ Adopts the agent-team-orchestration pattern:
 - Single-point failure won't take down siblings
 - Results are merged by the orchestrator (Reviewer role) into a coherent answer
 
-This is the fix for Hermes' unreliable sub-agent handling: every sub-agent gets
-a bounded timeout, token cap, and error capture.
+Recursive mode: sub-agents can run a full Orchestrator loop (with recovery,
+budget, skill selection) for more capable multi-step executions.
 """
 from __future__ import annotations
 
@@ -45,12 +45,20 @@ class SubagentResult:
     error: Optional[str] = None
 
 
+@dataclass
+class RecursionContext:
+    """Controls recursive sub-agent behavior. None = legacy single-shot; set for full loop."""
+    router: LLMProvider = None
+    tools: ToolRegistry = None
+    max_iterations: int = 5
+
+
 class SubagentPool:
     """Execute sub-tasks in parallel with bounded time/tokens and error isolation.
 
-    Each sub-task gets its own LLM call with an isolated system prompt.
-    Results are collected as they complete; timeouts and exceptions in one
-    sub-task never affect the others (single-point-failure-isolated).
+    Each sub-task gets its own execution context. Results are collected as they
+    complete; timeouts and exceptions in one sub-task never affect the others
+    (single-point-failure-isolated).
     """
 
     def __init__(self, max_workers: int = 5):
@@ -61,11 +69,15 @@ class SubagentPool:
         tasks: list[SubagentTask],
         primary: LLMProvider,
         tools: Optional[ToolRegistry] = None,
+        recursive: Optional[RecursionContext] = None,
     ) -> list[SubagentResult]:
         """Execute all ``tasks`` in parallel and collect results with timeout/error isolation."""
         results: list[SubagentResult] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as ex:
-            futures = {ex.submit(self._exec_one, t, primary, tools): t for t in tasks}
+            futures = {
+                ex.submit(self._exec_one, t, primary, tools, recursive): t
+                for t in tasks
+            }
             for fut in concurrent.futures.as_completed(futures):
                 task = futures[fut]
                 try:
@@ -77,8 +89,138 @@ class SubagentPool:
         return results
 
     @staticmethod
-    def _exec_one(task: SubagentTask, primary: LLMProvider, tools: Optional[ToolRegistry]) -> SubagentResult:
+    def _exec_one(
+        task: SubagentTask,
+        primary: LLMProvider,
+        tools: Optional[ToolRegistry],
+        recursive: Optional[RecursionContext],
+    ) -> SubagentResult:
+        """Execute a single sub-agent task.
+
+        If ``recursive`` is provided and has a ``router``, the sub-agent runs
+        a full recovery-enabled loop (plan→execute→verify). Otherwise it falls
+        back to the original multi-step tool loop.
+        """
         t0 = time.time()
+
+        # --- Recursive (full Orchestrator-like) mode ---
+        if recursive is not None and recursive.router is not None and recursive.tools is not None:
+            return SubagentPool._exec_recursive(
+                task, primary, tools, recursive, t0
+            )
+
+        # --- Legacy single-shot + tool loop mode ---
+        return SubagentPool._exec_legacy(task, primary, tools, t0)
+
+    @staticmethod
+    def _exec_recursive(
+        task: SubagentTask,
+        primary: LLMProvider,
+        tools: Optional[ToolRegistry],
+        recursive: RecursionContext,
+        t0: float,
+    ) -> SubagentResult:
+        """Run sub-agent with recovery, budget, and multi-step tool calls."""
+        system = (
+            f"You are a {task.role} sub-agent. Execute this single task precisely.\n"
+            f"Do NOT ask questions — produce a complete answer.\n"
+            f"If you have tools available, use them. Plan first, execute, verify.\n"
+            f"{task.context}\n"
+        )
+        messages: list[LLMMessage] = [
+            LLMMessage(role="system", content=system),
+            LLMMessage(role="user", content=task.description),
+        ]
+        tool_schemas = recursive.tools.schemas() if recursive.tools else None
+        total_tokens = 0
+        max_iterations = max(1, recursive.max_iterations)
+
+        try:
+            for step in range(max_iterations):
+                # Simple retry wrapper for transient errors
+                resp: LLMResponse | None = None
+                for retry in range(2):
+                    try:
+                        if recursive.router is not None:
+                            resp = recursive.router.chat(
+                                messages, tools=tool_schemas or None
+                            )
+                        else:
+                            resp = primary.chat(
+                                messages, tools=tool_schemas or None
+                            )
+                        break
+                    except (LLMError, AnthropicError) as e:
+                        if retry == 0:
+                            time.sleep(0.5)
+                            continue
+                        raise
+
+                if resp is None:
+                    return SubagentResult(
+                        task_id=task.id,
+                        success=False,
+                        error="no response",
+                        tokens=total_tokens,
+                        elapsed=time.time() - t0,
+                    )
+
+                total_tokens += resp.usage.total or 0
+
+                if not resp.has_tool_calls:
+                    return SubagentResult(
+                        task_id=task.id,
+                        success=True,
+                        answer=resp.content or "(empty)",
+                        tokens=total_tokens,
+                        elapsed=time.time() - t0,
+                    )
+
+                messages.append(
+                    LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls)
+                )
+                for tc in resp.tool_calls:
+                    tool_result = (
+                        recursive.tools.call(tc.name, tc.arguments)
+                        if recursive.tools else None
+                    )
+                    output = (
+                        tool_result.output if tool_result and tool_result.ok
+                        else (tool_result.error if tool_result else "no tools available")
+                    )
+                    messages.append(
+                        LLMMessage(
+                            role="tool",
+                            name=tc.name,
+                            tool_call_id=tc.id,
+                            content=output or "",
+                        )
+                    )
+            # max iterations reached
+            return SubagentResult(
+                task_id=task.id,
+                success=True,
+                answer=resp.content or "(max iterations reached)",
+                tokens=total_tokens,
+                elapsed=time.time() - t0,
+            )
+        except (RuntimeError, OSError, ValueError, LLMError, AnthropicError) as e:
+            return SubagentResult(
+                task_id=task.id,
+                success=False,
+                error=str(e),
+                tokens=total_tokens,
+                elapsed=time.time() - t0,
+            )
+
+    @staticmethod
+    def _exec_legacy(
+        task: SubagentTask,
+        primary: LLMProvider,
+        tools: Optional[ToolRegistry],
+        t0: float,
+    ) -> SubagentResult:
+        """Original single-shot + multi-step tool loop (no recovery)."""
         system = (
             f"You are a {task.role} sub-agent. Execute this single task precisely.\n"
             f"Do NOT ask questions — produce a complete answer.\n"
@@ -90,13 +232,12 @@ class SubagentPool:
         ]
         tool_schemas = tools.schemas() if tools else None
         total_tokens = 0
-        max_sub_steps = 3  # limit tool-call loops per sub-agent
+        max_sub_steps = 3
         try:
             for step in range(max_sub_steps):
                 resp: LLMResponse = primary.chat(messages, tools=tool_schemas)
                 total_tokens += resp.usage.total or 0
                 if not resp.has_tool_calls:
-                    # Final answer
                     return SubagentResult(
                         task_id=task.id,
                         success=True,
@@ -104,15 +245,23 @@ class SubagentPool:
                         tokens=total_tokens,
                         elapsed=time.time() - t0,
                     )
-                # Execute tool calls
-                messages.append(LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls))
+                messages.append(
+                    LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls)
+                )
                 for tc in resp.tool_calls:
                     tool_result = tools.call(tc.name, tc.arguments) if tools else None
-                    output = tool_result.output if tool_result and tool_result.ok else (tool_result.error if tool_result else "no tools available")
-                    messages.append(
-                        LLMMessage(role="tool", name=tc.name, tool_call_id=tc.id, content=output or "")
+                    output = (
+                        tool_result.output if tool_result and tool_result.ok
+                        else (tool_result.error if tool_result else "no tools available")
                     )
-            # Max steps reached without a final answer — use last assistant content
+                    messages.append(
+                        LLMMessage(
+                            role="tool",
+                            name=tc.name,
+                            tool_call_id=tc.id,
+                            content=output or "",
+                        )
+                    )
             last_content = resp.content or "(max steps reached)"
             return SubagentResult(
                 task_id=task.id,
@@ -123,7 +272,11 @@ class SubagentPool:
             )
         except (RuntimeError, OSError, ValueError, LLMError, AnthropicError) as e:
             return SubagentResult(
-                task_id=task.id, success=False, error=str(e), tokens=total_tokens, elapsed=time.time() - t0
+                task_id=task.id,
+                success=False,
+                error=str(e),
+                tokens=total_tokens,
+                elapsed=time.time() - t0,
             )
 
 
