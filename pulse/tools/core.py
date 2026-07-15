@@ -6,7 +6,6 @@ web search, web fetch, code execution, HTTP requests, and file editing.
 from __future__ import annotations
 
 import ast
-import json
 import subprocess
 import urllib.parse
 import urllib.request
@@ -46,7 +45,7 @@ class WebSearchTool(Tool):
                         href_end = part.index('"', href_start)
                         href = part[href_start:href_end]
                         text_start = part.index('</a>') + 4
-                        text_end = part.index('</a>', text_start) if '</a>' in part[text_start:] else text_start + 200
+                        _ = part.index('</a>', text_start) if '</a>' in part[text_start:] else text_start + 200
                         text = part[text_start:].split("</a>")[0] if "</a>" in part[text_start:] else ""
                         text = text.strip()
                         if href and text:

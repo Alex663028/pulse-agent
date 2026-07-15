@@ -11,8 +11,6 @@ import textwrap
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.live import Live
-from rich.markdown import Markdown
 
 from pulse.cli.runtime import Runtime
 from pulse.gateways.base import Gateway

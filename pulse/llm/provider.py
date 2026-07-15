@@ -226,7 +226,7 @@ class OpenAICompatProvider(LLMProvider):
                         yield LLMResponse(
                             tool_calls=[ToolCall(id=tc.id, name=tc.function.name, arguments=args)],
                         )
-        except Exception as e:
+        except Exception:
             # fall back to non-streaming
             yield self.chat(messages, tools=tools, tool_choice=tool_choice, **kwargs)
 
