@@ -5,14 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.1] — 2026-07-16
 
 ### Added
-- **`pulse init --base-url`**: point any provider at a custom OpenAI-compatible endpoint (self-hosted gateway, proxy, or alternative vendor).
-- **Any OpenAI-protocol endpoint**: built-in `openai` / `openrouter` / `deepseek` now honor an explicitly-set `base_url`, overriding their hardcoded official URLs in `_make_compat()` (`pulse/llm/config.py`). Previously these providers always used the vendor URL regardless of `base_url`.
+- **`pulse init --base-url`**: point any provider at a custom OpenAI-compatible endpoint (self-hosted gateway such as vLLM/LiteLLM, a reverse proxy, or an alternative vendor).
+- **Any OpenAI-protocol endpoint**: built-in `openai` / `openrouter` / `deepseek` now honor an explicitly-set `base_url`, overriding their previously-hardcoded official vendor URLs inside `_make_compat()` (`pulse/llm/config.py`). Previously these providers always called the official URL and silently discarded any `base_url` you configured — so self-hosted gateways and proxies were unreachable.
+- `model.base_url` in `config.yaml` is now a first-class field: `pulse init --base-url ...` writes it, and the router reads it back on every `build_router()` call.
 
 ### Fixed
-- `_make_compat()` ignored `model.base_url` for built-in cloud providers; a configured custom endpoint was silently discarded. Now an explicit `base_url` (anything other than the default local Ollama address) takes precedence.
+- `_make_compat()` ignored `model.base_url` for built-in cloud providers; a configured custom endpoint was silently discarded. Now an explicit `base_url` (anything other than the default local Ollama address `http://localhost:11434/v1`) takes precedence, while an unset/默认 value still falls back to the official vendor URL.
+
+### Stats
+- 8 new tests (base_url precedence, fallback-chain inheritance, init-wizard persistence). 130 → 138 total. All green on Python 3.11 & 3.12; ruff clean.
 
 ## [0.3.0] — 2026-07-15
 
