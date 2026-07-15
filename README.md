@@ -4,7 +4,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-73%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.4.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.4.0)
+[![Release](https://img.shields.io/badge/release-v0.4.1-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.4.1)
 
 A **self-improving personal AI agent** with a reliability-first core.
 Compatible with the [agentskills.io](https://agentskills.io) open standard.
@@ -420,6 +420,7 @@ python scripts/benchmark.py --quick
 - [x] **P1** — Test coverage boost, exception narrowing, docstrings, CONTRIBUTING/Docker/Makefile
 - [x] **P2** — Plugin sandbox, .env chmod 600, benchmark scripts, Mermaid diagrams + TUI screenshots
 - [x] **v0.4.0** — Anthropic provider, rate limiter, bad-response fallback, thread-safe storage, per-user Telegram sessions, progressive context compaction, health endpoint, cron Event-based scheduling, skill evolution filtering, token estimation accuracy, MCP reader-thread cleanup
+- [x] **v0.4.1** — P0-P2 reliability audit: thread-local Storage + WAL, Windows signal compat, Router AnthropicError fix, 7-module exception coverage, sub-agent tool-call loop, skill dedup, health cache, MemoryStore thread-safe, Observability cap, cron `*/N` matching, decompose heuristic improvements
 
 ---
 
