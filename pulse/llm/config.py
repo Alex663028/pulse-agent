@@ -1,7 +1,7 @@
 """Build a provider/router from application settings."""
 from __future__ import annotations
 
-from pulse.config.settings import Settings, load_env
+from pulse.config.settings import DEFAULT_BASE_URL, Settings, load_env
 from pulse.llm.provider import (
     LLMProvider,
     MockProvider,
@@ -21,7 +21,14 @@ def _make_compat(settings: Settings, env: dict[str, str], provider: str) -> Open
         "openrouter": "https://openrouter.ai/api/v1",
         "deepseek": "https://api.deepseek.com/v1",
     }
-    base = base_urls.get(provider, ms.base_url)
+    # Respect an EXPLICITLY-set base_url so Pulse can target any
+    # OpenAI-protocol-compatible endpoint (self-hosted gateways, proxies,
+    # alternative vendors, etc.). Only fall back to the official URL when
+    # base_url is unset or still at its default (the local Ollama address).
+    if ms.base_url and ms.base_url != DEFAULT_BASE_URL:
+        base = ms.base_url
+    else:
+        base = base_urls.get(provider, ms.base_url)
     return OpenAICompatProvider(base_url=base, api_key=key, model=ms.model)
 
 

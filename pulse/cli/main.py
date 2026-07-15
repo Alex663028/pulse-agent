@@ -68,12 +68,19 @@ def init(
     provider: str = typer.Option(None, help="ollama|openai|openrouter|deepseek|mock"),
     model: str = typer.Option(None, help="model name, e.g. qwen2.5:7b"),
     api_key: str = typer.Option(None, help="API key for cloud providers"),
+    base_url: str = typer.Option(None, "--base-url", help="Custom OpenAI-compatible endpoint base URL (e.g. https://my-gateway.example.com/v1)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="non-interactive with defaults"),
 ):
-    """Configure Pulse (zero-config, defaults to local Ollama)."""
+    """Configure Pulse (zero-config, defaults to local Ollama).
+
+    Use ``--base-url`` to point at any OpenAI-protocol-compatible endpoint:
+    a self-hosted gateway, a proxy, or an alternative vendor. Built-in
+    ``openai``/``openrouter``/``deepseek`` will then call your endpoint
+    instead of the official vendor URL.
+    """
     from pulse.config.settings import load_settings
 
-    run_init(load_settings(), provider=provider, model=model, api_key=api_key, non_interactive=yes)
+    run_init(load_settings(), provider=provider, model=model, api_key=api_key, base_url=base_url, non_interactive=yes)
 
 
 @app.command()

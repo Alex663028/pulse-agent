@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 from pulse.cli.doctor import run_doctor
+from pulse.cli.init_wizard import run_init
 from pulse.cli.skills_cli import cmd_list, cmd_eval, cmd_promote, cmd_rollback, default_runner, BUILTIN_GOLDEN
 from pulse.config.settings import Settings, ModelSettings, load_settings, save_settings, load_env
 from pulse.skills.loader import SkillRecord
@@ -81,6 +82,40 @@ def test_load_env_missing_file():
     s = Settings(config_dir=Path("/tmp/nonexistent_pulse_env"))
     env = load_env(s)
     assert env == {}
+
+
+# ---- init_wizard (was 0%) ----
+def test_run_init_ollama_custom_base_url(tmp_path, monkeypatch):
+    from pulse.cli import init_wizard
+
+    monkeypatch.setattr(init_wizard, "_ollama_reachable", lambda base: True)
+    s = Settings(config_dir=tmp_path)
+    out = run_init(s, provider="ollama", base_url="https://my-ollama.example.com/v1", non_interactive=True)
+    assert out.model.base_url == "https://my-ollama.example.com/v1"
+    assert out.model.provider == "ollama"
+    # persists and reloads with the custom base url
+    reloaded = load_settings(tmp_path)
+    assert reloaded.model.base_url == "https://my-ollama.example.com/v1"
+
+
+def test_run_init_cloud_custom_base_url(tmp_path, monkeypatch):
+    from pulse.cli import init_wizard
+
+    monkeypatch.setattr(init_wizard, "_ollama_reachable", lambda base: True)
+    s = Settings(config_dir=tmp_path)
+    out = run_init(s, provider="openai", base_url="https://gw.example.com/v1", non_interactive=True)
+    assert out.model.base_url == "https://gw.example.com/v1"
+    assert out.api_key_env == "OPENAI_API_KEY"
+
+
+def test_run_init_default_base_url_untouched(tmp_path, monkeypatch):
+    from pulse.cli import init_wizard
+
+    monkeypatch.setattr(init_wizard, "_ollama_reachable", lambda base: False)
+    s = Settings(config_dir=tmp_path)
+    out = run_init(s, provider="ollama", non_interactive=True)
+    assert out.model.base_url == "http://localhost:11434/v1"
+    assert out.model.provider == "ollama"
 
 
 # ---- skills_cli (was 28%) ----

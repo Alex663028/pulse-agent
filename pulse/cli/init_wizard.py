@@ -44,9 +44,15 @@ def run_init(
     provider: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
+    base_url: str | None = None,
     non_interactive: bool = False,
 ) -> Settings:
-    """Interactive (or non-interactive) wizard that configures provider/model/keys and persists settings."""
+    """Interactive (or non-interactive) wizard that configures provider/model/keys and persists settings.
+
+    ``base_url`` overrides the endpoint for any provider, enabling targets that
+    speak the OpenAI ``/v1/chat/completions`` protocol but live somewhere other
+    than the official vendor URL (self-hosted gateways, proxies, alt vendors).
+    """
     console.print("[bold cyan]Pulse init[/bold cyan] — configure your agent\n")
 
     if provider is None:
@@ -61,17 +67,23 @@ def run_init(
     ms.provider = provider
 
     if provider == "ollama":
-        base = DEFAULT_BASE_URL
+        base = base_url or DEFAULT_BASE_URL
+        if base_url:
+            console.print(f"[cyan]Using custom base URL:[/cyan] {base}")
         if _ollama_reachable(base):
-            console.print("[green]✓ Detected a running Ollama at[/green] " + base)
+            console.print("[green]✓ Detected a server at[/green] " + base)
         else:
-            console.print("[yellow]! No Ollama detected at[/yellow] " + base + " — start it with `ollama serve` later.")
+            console.print("[yellow]! No server detected at[/yellow] " + base + " — make sure it's reachable before chatting.")
         ms.base_url = base
         ms.model = model or Prompt.ask("Model", default=DEFAULT_MODEL) if not non_interactive else (model or DEFAULT_MODEL)
         settings.api_key_env = ""
     elif provider == "mock":
+        if base_url:
+            ms.base_url = base_url
         ms.model = model or "mock-1"
     else:
+        if base_url:
+            ms.base_url = base_url
         key_env = f"{provider.upper()}_API_KEY"
         if api_key:
             (settings.config_dir).mkdir(parents=True, exist_ok=True)

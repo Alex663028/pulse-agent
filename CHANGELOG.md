@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`pulse init --base-url`**: point any provider at a custom OpenAI-compatible endpoint (self-hosted gateway, proxy, or alternative vendor).
+- **Any OpenAI-protocol endpoint**: built-in `openai` / `openrouter` / `deepseek` now honor an explicitly-set `base_url`, overriding their hardcoded official URLs in `_make_compat()` (`pulse/llm/config.py`). Previously these providers always used the vendor URL regardless of `base_url`.
+
+### Fixed
+- `_make_compat()` ignored `model.base_url` for built-in cloud providers; a configured custom endpoint was silently discarded. Now an explicit `base_url` (anything other than the default local Ollama address) takes precedence.
+
 ## [0.3.0] — 2026-07-15
 
 ### Added — MCP (Model Context Protocol) integration

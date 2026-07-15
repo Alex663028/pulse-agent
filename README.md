@@ -216,6 +216,30 @@ pulse init --provider deepseek --model deepseek-chat --api-key sk-xxx --yes
 
 API keys are stored in `~/.pulse/.env` (never in config.yaml). Provider defaults to Ollama — no key required.
 
+### Any OpenAI-compatible endpoint
+
+Every built-in provider speaks the OpenAI `/v1/chat/completions` protocol, so
+you can point Pulse at **any** compatible endpoint — a self-hosted gateway
+(vLLM, LiteLLM, Ollama), a proxy, or an alternative vendor — by passing
+`--base-url`. An explicitly-set `--base-url` overrides the official vendor URL
+for `openai` / `openrouter` / `deepseek`.
+
+```bash
+# Route OpenAI through your own gateway / proxy
+pulse init --provider openai --model gpt-4o-mini \
+  --base-url https://my-gateway.example.com/v1 --yes
+
+# Self-hosted vLLM / LiteLLM exposing the OpenAI protocol
+pulse init --provider openai --model meta-llama/Llama-3-8b \
+  --base-url http://10.0.0.5:8000/v1 --yes
+
+# Point Ollama at a non-default host
+pulse init --provider ollama --model qwen2.5:7b \
+  --base-url http://ollama.internal:11434/v1 --yes
+```
+
+You can also set `base_url` directly in `~/.pulse/config.yaml` under `model:`.
+
 ---
 
 ## Installing Skills from the Ecosystem

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from pulse.config.settings import DEFAULT_BASE_URL, ModelSettings, Settings
+from pulse.llm.config import build_router
 from pulse.llm.provider import LLMError, LLMMessage, LLMResponse, MockProvider, OpenAICompatProvider, ToolCall, Usage
 from pulse.memory.compactor import compact
 from pulse.memory.session_index import SessionIndex
@@ -179,6 +181,52 @@ def test_openai_compat_provider_error_wrapped():
     p = OpenAICompatProvider(base_url="http://localhost:1/v1", api_key="x", model="m", timeout=0.5)
     with pytest.raises(LLMError):
         p.chat([LLMMessage(role="user", content="hi")])
+
+
+# ---- OpenAI-compatible base_url (any endpoint) ----
+def test_make_compat_respects_explicit_base_url():
+    """A built-in provider (openai) must use an explicitly-set base_url
+    instead of the hardcoded official URL."""
+    s = Settings(model=ModelSettings(provider="openai", model="gpt-4o", base_url="https://my-gateway.example.com/v1"))
+    router = build_router(s)
+    assert router.primary.base_url == "https://my-gateway.example.com/v1"
+    assert router.primary.name == "openai-compat"
+
+
+def test_make_compat_openrouter_respects_explicit_base_url():
+    s = Settings(model=ModelSettings(provider="openrouter", model="openai/gpt-4o", base_url="https://proxy.local/v1"))
+    router = build_router(s)
+    assert router.primary.base_url == "https://proxy.local/v1"
+
+
+def test_make_compat_falls_back_to_official_when_default():
+    """When base_url is still the default (local Ollama addr), built-in
+    providers should resolve to their official endpoint."""
+    s = Settings(model=ModelSettings(provider="openai", model="gpt-4o"))
+    assert s.model.base_url == DEFAULT_BASE_URL
+    router = build_router(s)
+    assert router.primary.base_url == "https://api.openai.com/v1"
+
+
+def test_make_compat_unknown_provider_uses_base_url():
+    s = Settings(model=ModelSettings(provider="custom", model="m", base_url="https://anything/v1"))
+    router = build_router(s)
+    assert router.primary.base_url == "https://anything/v1"
+
+
+def test_make_compat_fallback_chain_preserves_base_url():
+    """Fallback providers must also respect explicit base_urls."""
+    s = Settings(
+        model=ModelSettings(
+            provider="openai",
+            model="gpt-4o",
+            base_url="https://gw.example.com/v1",
+            fallback=["openrouter:openai/gpt-4o"],
+        )
+    )
+    router = build_router(s)
+    assert router.primary.base_url == "https://gw.example.com/v1"
+    assert router.fallbacks[0].base_url == "https://gw.example.com/v1"
 
 
 # ---- cron edges (was 71%) ----
