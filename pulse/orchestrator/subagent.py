@@ -150,7 +150,7 @@ class SubagentPool:
                                 messages, tools=tool_schemas or None
                             )
                         break
-                    except (LLMError, AnthropicError) as e:
+                    except (LLMError, AnthropicError):
                         if retry == 0:
                             time.sleep(0.5)
                             continue

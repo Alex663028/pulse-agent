@@ -33,10 +33,12 @@ skills_app = typer.Typer(help="Manage skills.")
 cron_app = typer.Typer(help="Manage scheduled cron jobs.")
 rl_app = typer.Typer(help="RL training data pipeline.")
 plugin_app = typer.Typer(help="Manage plugins.")
+web_app = typer.Typer(help="Web UI — session management dashboard on port 10000.")
 app.add_typer(skills_app, name="skills")
 app.add_typer(cron_app, name="cron")
 app.add_typer(rl_app, name="rl")
 app.add_typer(plugin_app, name="plugin")
+app.add_typer(web_app, name="web")
 
 mcp_app = typer.Typer(help="Manage Model Context Protocol (MCP) servers.")
 app.add_typer(mcp_app, name="mcp")
@@ -178,6 +180,7 @@ def fork(
 ):
     """Decompose a complex task into parallel sub-agents, merge results."""
     from pulse.orchestrator.subagent import (
+        RecursionContext,
         SubagentPool,
         SubagentTask,
         decompose,
@@ -193,7 +196,7 @@ def fork(
         SubagentTask(id=f"sub_{i}", description=s, context=f"Part {i+1}/{len(subs)}") for i, s in enumerate(subs)
     ]
     with console.status("[cyan]Sub-agents running…[/cyan]"):
-        results = pool.run(tasks, primary=rt.router.primary, tools=rt.tools)
+        results = pool.run(tasks, primary=rt.router.primary, tools=rt.tools, recursive=RecursionContext(router=rt.router, tools=rt.tools))
     for r in results:
         icon = "[green]✓[/green]" if r.success else "[red]✗[/red]"
         console.print(f"  {icon} {r.task_id}  tokens={r.tokens}  {r.elapsed:.1f}s")
@@ -505,6 +508,19 @@ def mcp_export():
     from pulse.config.settings import load_settings
 
     cmd_export(load_settings())
+
+
+@web_app.command("start")
+def web_start(
+    port: int = typer.Option(10000, "--port", "-p", help="Port to listen on"),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
+    debug: bool = typer.Option(False, "--debug", help="Enable Flask debug mode"),
+):
+    """Start the Web UI dashboard on port 10000."""
+    from pulse.web.server import main as web_main
+    import sys
+    sys.argv = ["pulse-web", "--port", str(port), "--host", host] + (["--debug"] if debug else [])
+    web_main()
 
 
 if __name__ == "__main__":

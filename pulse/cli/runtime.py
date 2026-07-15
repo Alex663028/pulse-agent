@@ -18,11 +18,11 @@ from pulse.tools.builtin import register_builtin_tools
 from pulse.tools.loader import load_custom_tools
 from pulse.tools.registry import ToolRegistry
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Runtime:
-    """Container of wired-up services used by CLI/gateway commands."""
-
     settings: Settings
     storage: Storage
     memory: MemoryStore
@@ -35,7 +35,6 @@ class Runtime:
 
 
 def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
-    """Construct and wire together all Pulse services."""
     settings = load_settings(config_dir)
     _setup_logging(settings.log_level)
     storage = Storage(settings.db_path)
@@ -48,7 +47,9 @@ def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
         tools.register(custom_tool)
     # Load executable skills and register their tools
     from pulse.skills.executable import load_executable_skills
-    for handle in load_executable_skills([settings.skills_dir, settings.config_dir / "skills", settings.skills_dir.parent / "skills"], tools):
+    for handle in load_executable_skills(
+        [settings.skills_dir, settings.config_dir / "skills", settings.skills_dir.parent / "skills"], tools
+    ):
         if handle.errors:
             logger.warning("skill '%s' failed to load: %s", handle.name, handle.errors)
     router = build_router(settings)
@@ -65,15 +66,14 @@ def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
 
 
 def _setup_logging(level: str = "INFO") -> None:
-    """Configure root pulse logger with stderr handler."""
     lvl = getattr(logging, level.upper(), logging.INFO)
-    logger = logging.getLogger("pulse")
-    if logger.handlers:
+    logger_root = logging.getLogger("pulse")
+    if logger_root.handlers:
         return
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter(
         "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
         datefmt="%H:%M:%S",
     ))
-    logger.setLevel(lvl)
-    logger.addHandler(handler)
+    logger_root.setLevel(lvl)
+    logger_root.addHandler(handler)
