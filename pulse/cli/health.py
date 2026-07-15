@@ -9,18 +9,29 @@ import json
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-from pulse.cli.runtime import bootstrap
+from pulse.cli.runtime import Runtime, bootstrap
+
+
+_runtime_cache: Runtime | None = None
 
 
 class HealthHandler(BaseHTTPRequestHandler):
-    """Minimal handler: GET / returns 200 with Pulse status JSON."""
+    """Minimal handler: GET / returns 200 with Pulse status JSON.
+
+    The Runtime is constructed once and cached across requests so health
+    probes (which may fire every 5-10 seconds) don't reopen SQLite connections
+    or rebuild the router on every call.
+    """
 
     def do_GET(self):
         if self.path != "/":
             self.send_error(404)
             return
+        global _runtime_cache
         try:
-            rt = bootstrap()
+            if _runtime_cache is None:
+                _runtime_cache = bootstrap()
+            rt = _runtime_cache
             status = {
                 "status": "ok",
                 "provider": rt.settings.model.provider,
@@ -33,7 +44,6 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(status).encode())
-            rt.storage.close()
         except Exception as e:
             self.send_response(503)
             self.send_header("Content-Type", "application/json")

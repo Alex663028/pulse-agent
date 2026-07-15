@@ -6,6 +6,7 @@ additionally indexed in local SQLite FTS5 for cross-session recall.
 """
 from __future__ import annotations
 
+import threading
 from uuid import uuid4
 
 from pulse.config.settings import Settings
@@ -23,6 +24,7 @@ class MemoryStore:
         self.storage = storage
         self.memory_path = settings.memory_dir / "MEMORY.md"
         self.user_path = settings.memory_dir / "USER.md"
+        self._lock = threading.Lock()
         self.ensure()
 
     def ensure(self) -> None:
@@ -43,8 +45,9 @@ class MemoryStore:
         text = text.strip()
         if not text:
             return
-        with self.memory_path.open("a", encoding="utf-8") as f:
-            f.write(f"\n- {text}\n")
+        with self._lock:
+            with self.memory_path.open("a", encoding="utf-8") as f:
+                f.write(f"\n- {text}\n")
         if index:
             self.storage.index_memory(f"mem:{uuid4().hex[:8]}", text)
 
@@ -58,8 +61,9 @@ class MemoryStore:
         fact = fact.strip()
         if not fact:
             return
-        with self.user_path.open("a", encoding="utf-8") as f:
-            f.write(f"\n- {fact}\n")
+        with self._lock:
+            with self.user_path.open("a", encoding="utf-8") as f:
+                f.write(f"\n- {fact}\n")
 
     # ---- recall ----
     def recall(self, query: str, limit: int = 10) -> list[dict[str, str]]:

@@ -29,17 +29,25 @@ class Event:
 
 
 class Observability:
-    """Structured JSON event emitter with a per-session ``trace_id`` for replayable traces."""
+    """Structured JSON event emitter with a per-session ``trace_id`` for replayable traces.
 
-    def __init__(self, trace_id: Optional[str] = None, logger: Optional[logging.Logger] = None):
+    Events are capped at ``max_events`` (default 5000) to prevent unbounded memory growth
+    in long-running services (``pulse serve``).
+    """
+
+    def __init__(self, trace_id: Optional[str] = None, logger: Optional[logging.Logger] = None, max_events: int = 5000):
         self.trace_id = trace_id or uuid.uuid4().hex[:12]
         self.events: list[Event] = []
         self._log = logger or logging.getLogger("pulse")
+        self._max_events = max_events
 
     def emit(self, kind: str, **data: Any) -> None:
         """Append an event of ``kind`` with arbitrary structured ``data`` and log it at DEBUG."""
         ev = Event(ts=time.time(), trace_id=self.trace_id, kind=kind, data=data)
         self.events.append(ev)
+        # Cap at max_events to prevent memory leak in long-running services
+        if len(self.events) > self._max_events:
+            self.events = self.events[-self._max_events:]
         self._log.debug(ev.to_json())
 
     def token_usage(self, prompt: int, completion: int, total: int) -> None:

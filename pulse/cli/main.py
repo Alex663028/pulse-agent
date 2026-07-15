@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 from pathlib import Path
 
 import typer
@@ -162,7 +161,9 @@ def serve(
         sched.start()
     console.print("[dim]Ctrl-C to stop[/dim]")
     try:
-        signal.pause()
+        # signal.pause() is unavailable on Windows; use an Event instead.
+        import threading
+        threading.Event().wait()
     except (KeyboardInterrupt, AttributeError):
         pass
     sched.stop()

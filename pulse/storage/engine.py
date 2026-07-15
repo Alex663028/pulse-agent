@@ -70,11 +70,29 @@ class Storage:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
-        self._conn.row_factory = sqlite3.Row
-        self._conn.executescript(SCHEMA)
-        self._conn.commit()
+        self._local = threading.local()
         self._lock = threading.Lock()
+        conn = self._conn
+        conn.row_factory = sqlite3.Row
+        conn.executescript(SCHEMA)
+        conn.commit()
+        # Enable WAL for better read concurrency across threads.
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        """Return a connection bound to the current thread."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.executescript(SCHEMA)
+            conn.commit()
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            self._local.conn = conn
+        return conn
 
     @staticmethod
     def has_fts5() -> bool:
@@ -113,52 +131,13 @@ class Storage:
         used_skills: list[str],
         data: dict[str, Any],
     ) -> None:
-        """Persist a completed execution trajectory with skills used and outcome flag."""
+        """Persist a complete trajectory record for the given session."""
         with self._tx():
             self._conn.execute(
-                "INSERT INTO trajectories(id, session_id, created_at, outcome, used_skills, data) VALUES(?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO trajectories(id, session_id, created_at, outcome, used_skills, data) VALUES(?,?,?,?,?,?)",
                 (tid, session_id, _now(), int(outcome), json.dumps(used_skills), json.dumps(data)),
             )
 
-    # ---- eval runs ----
-    def record_eval(
-        self, run_id: str, skill_id: str, baseline_id: Optional[str], decision: str, metrics: dict[str, Any]
-    ) -> None:
-        """Insert an eval-run row capturing the decision and metrics for a skill."""
-        with self._tx():
-            self._conn.execute(
-                "INSERT INTO eval_runs(id, skill_id, baseline_id, created_at, decision, metrics) VALUES(?,?,?,?,?,?)",
-                (run_id, skill_id, baseline_id, _now(), decision, json.dumps(metrics)),
-            )
-
-    def latest_eval(self, skill_id: str) -> Optional[dict[str, Any]]:
-        """Return the most recent eval row for ``skill_id`` (with parsed metrics), or None."""
-        row = self._conn.execute(
-            "SELECT * FROM eval_runs WHERE skill_id=? ORDER BY created_at DESC LIMIT 1", (skill_id,)
-        ).fetchone()
-        if not row:
-            return None
-        return {**dict(row), "metrics": json.loads(row["metrics"])}
-
-    # ---- skill versions ----
-    def save_skill_version(
-        self, skill_name: str, version: str, path: Optional[str], status: str, metrics: dict[str, Any]
-    ) -> None:
-        """Insert or replace a skill_version row keyed by ``skill_name@version``."""
-        with self._tx():
-            self._conn.execute(
-                "INSERT OR REPLACE INTO skill_versions(id, skill_name, version, path, status, created_at, metrics) VALUES(?,?,?,?,?,?,?)",
-                (f"{skill_name}@{version}", skill_name, version, path, status, _now(), json.dumps(metrics)),
-            )
-
-    def skill_versions(self, skill_name: str) -> list[dict[str, Any]]:
-        """Return all stored versions for ``skill_name``, newest first, with parsed metrics."""
-        rows = self._conn.execute(
-            "SELECT * FROM skill_versions WHERE skill_name=? ORDER BY created_at DESC", (skill_name,)
-        ).fetchall()
-        return [{**dict(r), "metrics": json.loads(r["metrics"])} for r in rows]
-
-    # ---- trajectory query ----
     def query_trajectories(
         self,
         since: Optional[str] = None,
@@ -166,26 +145,83 @@ class Storage:
         skill: Optional[str] = None,
         limit: int = 500,
     ) -> list[dict[str, Any]]:
-        """Query trajectories filtered by timestamp, outcome and/or skill usage."""
-        clauses = []
+        """Query trajectories with optional filters and return a list of row dicts."""
+        where: list[str] = []
         params: list[Any] = []
         if since:
-            clauses.append("created_at >= ?")
+            where.append("created_at >= ?")
             params.append(since)
         if outcome is not None:
-            clauses.append("outcome = ?")
+            where.append("outcome = ?")
             params.append(int(outcome))
         if skill:
-            clauses.append("used_skills LIKE ?")
+            where.append("used_skills LIKE ?")
             params.append(f"%{skill}%")
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-        rows = self._conn.execute(
-            f"SELECT * FROM trajectories {where} ORDER BY created_at DESC LIMIT ?",
-            params + [limit],
-        ).fetchall()
+        sql = "SELECT * FROM trajectories"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        with self._lock:
+            rows = self._conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
-    # ---- memory FTS5 ----
+    # ---- eval runs ----
+    def record_eval(
+        self,
+        run_id: str,
+        skill_id: str,
+        baseline_id: Optional[str],
+        decision: str,
+        metrics: dict[str, Any],
+    ) -> None:
+        """Record a skill evaluation run decision + metrics."""
+        with self._tx():
+            self._conn.execute(
+                "INSERT OR REPLACE INTO eval_runs(id, skill_id, baseline_id, created_at, decision, metrics) VALUES(?,?,?,?,?,?)",
+                (run_id, skill_id, baseline_id, _now(), decision, json.dumps(metrics)),
+            )
+
+    def latest_eval(self, skill_id: str) -> Optional[dict[str, Any]]:
+            """Return the most recent evaluation row for a skill id, or None."""
+            with self._lock:
+                row = self._conn.execute(
+                    "SELECT * FROM eval_runs WHERE skill_id = ? ORDER BY created_at DESC LIMIT 1",
+                    (skill_id,),
+                ).fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            if isinstance(d.get("metrics"), str):
+                d["metrics"] = json.loads(d["metrics"])
+            return d
+
+    # ---- skill versions ----
+    def save_skill_version(
+        self,
+        skill_name: str,
+        version: str,
+        path: str,
+        status: str,
+        metrics: dict[str, Any],
+    ) -> None:
+        """Persist a skill version snapshot."""
+        with self._tx():
+            self._conn.execute(
+                "INSERT OR REPLACE INTO skill_versions(id, skill_name, version, path, status, created_at, metrics) VALUES(?,?,?,?,?,?,?)",
+                (f"{skill_name}@{version}", skill_name, version, path, status, _now(), json.dumps(metrics)),
+            )
+
+    def skill_versions(self, skill_name: str) -> list[dict[str, Any]]:
+        """Return all persisted versions for a skill, newest first."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM skill_versions WHERE skill_name = ? ORDER BY created_at DESC",
+                (skill_name,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ---- memory (FTS5) ----
     def index_memory(self, session_id: str, content: str) -> None:
         """Insert a memory blob into both the fallback table and the FTS5 index."""
         with self._tx():
@@ -200,15 +236,20 @@ class Storage:
         """Full-text search over indexed memory; falls back to substring scan if FTS5 is unavailable."""
         if not self.has_fts5():
             # graceful degradation: substring scan
-            rows = self._conn.execute("SELECT * FROM fts_memory ORDER BY ts DESC").fetchall()
+            with self._lock:
+                rows = self._conn.execute("SELECT * FROM fts_memory ORDER BY ts DESC").fetchall()
             q = query.lower()
             return [dict(r) for r in rows if q in (r["content"] or "").lower()][:limit]
-        rows = self._conn.execute(
-            "SELECT * FROM fts_memory_ix WHERE fts_memory_ix MATCH ? ORDER BY ts DESC LIMIT ?",
-            (query, limit),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM fts_memory_ix WHERE fts_memory_ix MATCH ? ORDER BY ts DESC LIMIT ?",
+                (query, limit),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def close(self) -> None:
-        """Close the underlying SQLite connection."""
-        self._conn.close()
+        """Close the underlying SQLite connection(s)."""
+        conn = getattr(self._local, "conn", None)
+        if conn:
+            conn.close()
+            self._local.conn = None

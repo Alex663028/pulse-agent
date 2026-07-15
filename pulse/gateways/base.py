@@ -10,7 +10,6 @@ runs cron-triggered tasks without waiting for user input.
 """
 from __future__ import annotations
 
-import signal
 import threading
 from abc import ABC, abstractmethod
 from typing import Optional
@@ -39,6 +38,7 @@ class GatewayManager:
         self.gateways: list[Gateway] = list(gateways or [])
         self._threads: list[threading.Thread] = []
         self._running = False
+        self._stop_event = threading.Event()
 
     def add(self, gw: Gateway) -> None:
         """Append a gateway to the managed set."""
@@ -47,6 +47,7 @@ class GatewayManager:
     def start_all(self, runtime: Runtime) -> None:
         """Start every managed gateway on its own daemon thread."""
         self._running = True
+        self._stop_event.clear()
         for gw in self.gateways:
             t = threading.Thread(target=gw.start, args=(runtime,), daemon=True, name=gw.name)
             t.start()
@@ -55,6 +56,7 @@ class GatewayManager:
     def stop_all(self) -> None:
         """Stop every gateway and join its thread (best-effort, 2s timeout each)."""
         self._running = False
+        self._stop_event.set()
         for gw in self.gateways:
             try:
                 gw.stop()
@@ -67,7 +69,7 @@ class GatewayManager:
     def wait(self) -> None:
         """Block until interrupted (Ctrl-C)."""
         try:
-            signal.pause()
+            self._stop_event.wait()
         except (KeyboardInterrupt, AttributeError):
             pass
         self.stop_all()

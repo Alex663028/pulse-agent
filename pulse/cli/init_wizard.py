@@ -23,6 +23,7 @@ from pulse.config.settings import (
 console = Console()
 
 PROVIDERS = {
+    "anthropic": "Anthropic (Claude, cloud, needs API key)",
     "ollama": "Local, self-hosted (default, zero config)",
     "openai": "OpenAI (cloud, needs API key)",
     "openrouter": "OpenRouter (200+ models, needs key)",

@@ -12,7 +12,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
-from pulse.llm.provider import LLMError, LLMMessage, LLMProvider, LLMResponse
+from pulse.llm.provider import (
+    AnthropicError,
+    LLMError,
+    LLMMessage,
+    LLMProvider,
+    LLMResponse,
+)
 
 if TYPE_CHECKING:
     from pulse.orchestrator.rate_limiter import RateLimiter
@@ -51,7 +57,7 @@ class Router:
                 if has_tools and not resp.has_tool_calls and not resp.content.strip():
                     continue  # bad response — try next provider
                 return resp
-            except LLMError as e:
+            except (LLMError, AnthropicError) as e:
                 last_err = e
                 continue
         raise LLMError(f"all providers failed (primary={self.primary.name}): {last_err}")

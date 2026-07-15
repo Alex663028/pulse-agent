@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from pulse.llm.provider import LLMMessage, LLMProvider, LLMResponse
+from pulse.llm.provider import AnthropicError, LLMError, LLMMessage, LLMProvider, LLMResponse
 from pulse.tools.registry import ToolRegistry
 
 
@@ -89,56 +89,83 @@ class SubagentPool:
             LLMMessage(role="user", content=task.description),
         ]
         tool_schemas = tools.schemas() if tools else None
+        total_tokens = 0
+        max_sub_steps = 3  # limit tool-call loops per sub-agent
         try:
-            resp: LLMResponse = primary.chat(messages, tools=tool_schemas)
-        except (RuntimeError, OSError, ValueError) as e:
-            return SubagentResult(task_id=task.id, success=False, error=str(e), elapsed=time.time() - t0)
-        return SubagentResult(
-            task_id=task.id,
-            success=bool(resp.content.strip()),
-            answer=resp.content,
-            tokens=resp.usage.total or 0,
-            elapsed=time.time() - t0,
-        )
+            for step in range(max_sub_steps):
+                resp: LLMResponse = primary.chat(messages, tools=tool_schemas)
+                total_tokens += resp.usage.total or 0
+                if not resp.has_tool_calls:
+                    # Final answer
+                    return SubagentResult(
+                        task_id=task.id,
+                        success=True,
+                        answer=resp.content or "(empty)",
+                        tokens=total_tokens,
+                        elapsed=time.time() - t0,
+                    )
+                # Execute tool calls
+                messages.append(LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls))
+                for tc in resp.tool_calls:
+                    tool_result = tools.call(tc.name, tc.arguments) if tools else None
+                    output = tool_result.output if tool_result and tool_result.ok else (tool_result.error if tool_result else "no tools available")
+                    messages.append(
+                        LLMMessage(role="tool", name=tc.name, tool_call_id=tc.id, content=output or "")
+                    )
+            # Max steps reached without a final answer — use last assistant content
+            last_content = resp.content or "(max steps reached)"
+            return SubagentResult(
+                task_id=task.id,
+                success=True,
+                answer=last_content,
+                tokens=total_tokens,
+                elapsed=time.time() - t0,
+            )
+        except (RuntimeError, OSError, ValueError, LLMError, AnthropicError) as e:
+            return SubagentResult(
+                task_id=task.id, success=False, error=str(e), tokens=total_tokens, elapsed=time.time() - t0
+            )
 
 
-# ---- decompose: split a complex task into sub-tasks ----
-
-DECOMPOSE_SYSTEM = (
-    "You are a task decomposer. Split the given task into 2-5 parallel sub-tasks. "
-    "Each sub-task should be independent (no shared state needed). "
-    "Reply with a numbered list, one sub-task per line, format: '1. <sub-task description>'. "
-    "Be concise. No preamble."
-)
-
-_HEURISTIC_SPLITTERS = [
-    r"\d+\.\s+",            # "1. do X"  "2. do Y"
-    r",\s*(?:and\s+)?",     # "do X, do Y" or "do X, and do Y"
-    r"(?:and)\s+",          # "collect data and analyze trends"
-    r";\s*",                # "do X; do Y"
-    r"\n\s*[-*•]",          # bullet list
-]
+# ---- decompose: split a complex task into independent sub-tasks ----
 
 
 def decompose(task: str, llm: Optional[LLMProvider] = None) -> list[str]:
-    """Split ``task`` into a list of sub-task descriptions."""
-    # try LLM-based decomposition first
+    """Split a complex task into independent sub-tasks. Uses LLM when available, else heuristic."""
     if llm is not None:
         try:
             resp = llm.chat(
-                [LLMMessage(role="system", content=DECOMPOSE_SYSTEM), LLMMessage(role="user", content=task)],
-                max_tokens=400,
+                [
+                    LLMMessage(
+                        role="system",
+                        content=(
+                            "Decompose the following task into 2-5 independent sub-tasks "
+                            "that can be executed in parallel. "
+                            "Return each sub-task on its own line, prefixed with '- '."
+                        ),
+                    ),
+                    LLMMessage(role="user", content=task),
+                ]
             )
-            lines = re.findall(r"\d+\.\s*(.+?)(?:\n|$)", resp.content or "")
-            if len(lines) >= 2:
-                return [line.strip() for line in lines if line.strip()]
-        except (RuntimeError, OSError):
+            parts = [ln.strip("- ").strip() for ln in resp.content.split("\n") if ln.strip().startswith("-")]
+            if len(parts) >= 2:
+                return parts[:5]
+        except (RuntimeError, OSError, IndexError, LLMError, AnthropicError):
             pass
-    # deterministic heuristic fallback
-    for sep in _HEURISTIC_SPLITTERS:
-        parts = re.split(sep, task)
+    # Heuristic fallback: split on bullet points or numbered items in the original task
+    parts = [ln.strip("- ").strip() for ln in task.split("\n") if ln.strip().startswith("-")]
+    if len(parts) >= 2:
+        return parts[:5]
+    # Try numbered list pattern: "1. ... 2. ... 3. ..."
+    numbered = re.split(r"\d+\.\s+", task)
+    numbered = [p.strip() for p in numbered if p.strip()]
+    if len(numbered) >= 2:
+        return [f"Step {i+1}: {p}" for i, p in enumerate(numbered)][:5]
+    # Try comma/and split: "collect data, analyze trends, and write report"
+    for sep in (", and ", ", ", " and ", " then "):
+        parts = [p.strip() for p in task.split(sep) if p.strip()]
         if len(parts) >= 2:
-            return [p.strip().rstrip(",;") for p in parts if p.strip() and len(p.strip()) > 5]
+            return parts[:5]
     # can't split — single sub-task
     return [task.strip()]
 
@@ -170,5 +197,5 @@ def merge_results(task: str, results: list[SubagentResult], llm: LLMProvider) ->
             max_tokens=2000,
         )
         return resp.content or merged
-    except (RuntimeError, OSError):
+    except (RuntimeError, OSError, LLMError, AnthropicError):
         return merged

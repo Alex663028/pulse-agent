@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from pulse.llm.provider import LLMMessage, LLMProvider
+from pulse.llm.provider import AnthropicError, LLMError, LLMMessage, LLMProvider
 from pulse.memory.store import MemoryStore
 from pulse.storage.engine import Storage
 
@@ -74,7 +74,7 @@ class DialecticEngine:
             if new_profile and len(new_profile) > 20 and new_profile != profile:
                 self._commit(profile, new_profile)
                 return new_profile
-        except (RuntimeError, OSError):
+        except (RuntimeError, OSError, LLMError, AnthropicError):
             pass
         return profile
 
@@ -122,6 +122,7 @@ class DialecticEngine:
         return restored
 
     def _recent_sessions(self, limit: int) -> list[dict]:
+        """Return recent session summaries."""
         rows = self.storage._conn.execute(
             "SELECT id, summary FROM sessions ORDER BY created_at DESC LIMIT ?", (limit,)
         ).fetchall()

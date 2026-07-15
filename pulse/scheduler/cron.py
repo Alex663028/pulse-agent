@@ -83,6 +83,12 @@ def _cron_matches(expr: str, dt: datetime) -> bool:
         for part in field.split(","):
             if part == "*" or part == "?":
                 ok = True
+            elif "/" in part:
+                # step syntax, e.g. */15
+                base, step = part.split("/", 1)
+                if base == "*":
+                    if val % int(step) == 0:
+                        ok = True
             elif "-" in part:
                 lo, hi = part.split("-", 1)
                 if int(lo) <= val <= int(hi):
@@ -142,6 +148,7 @@ class Scheduler:
         self._thread: Optional[threading.Thread] = None
         self._active = False
         self._lock = threading.Lock()
+        self._stop_event = threading.Event()
 
     def add(self, name: str, interval: float, fn: Callable[[], None], cron_expr: str = "") -> Job:
         """Register a job to fire every ``interval`` seconds (or per ``cron_expr``); returns the Job."""
@@ -189,24 +196,23 @@ class Scheduler:
         if self._thread is not None:
             return
         self._active = True
+        self._stop_event.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True, name="pulse-scheduler")
         self._thread.start()
 
     def stop(self) -> None:
         """Signal the scheduler loop to stop and join the background thread (3s timeout)."""
         self._active = False
+        self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=3)
             self._thread = None
 
     def _loop(self) -> None:
-        stop_event = threading.Event()
-        # Mirror _active so we can atomically update both
-        self._active = True
-        while not stop_event.is_set():
+        while not self._stop_event.is_set():
             # Use Event.wait instead of busy-loop sleep; stop_event lets us
             # wake up immediately when stop() is called
-            stop_event.wait(timeout=0.5)
+            self._stop_event.wait(timeout=0.5)
             if not self._active:
                 break
             now = time.time()

@@ -11,8 +11,9 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from pulse.llm.provider import LLMMessage, LLMProvider
+from pulse.llm.provider import AnthropicError, LLMError, LLMMessage, LLMProvider
 from pulse.skills.loader import SkillRecord, dump_skill_md, load_skill_dir
+from pulse.skills.registry import SkillRegistry
 
 _NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -31,12 +32,23 @@ def propose_skill(
     steps: list[str],
     skills_dir: Path,
     llm: Optional[LLMProvider] = None,
+    registry: Optional[SkillRegistry] = None,
 ) -> SkillRecord:
     """Distill a successful trajectory into a candidate skill written under ``skills_dir/<name>/SKILL.md``.
 
     An optional ``llm`` refines the prose draft; failures fall back to the template body.
+    If ``registry`` is provided, the skill name is checked for conflicts: if a promoted
+    skill with the same name already exists, a suffix is appended to avoid overwriting it.
     """
     name = _slug(task)
+    # Avoid overwriting an existing promoted skill
+    if registry is not None:
+        existing = registry.get(name)
+        if existing and existing.status == "promoted":
+            suffix = 2
+            while registry.get(f"{name}-v{suffix}") is not None:
+                suffix += 1
+            name = f"{name}-v{suffix}"
     skills_dir = Path(skills_dir)
     dest = skills_dir / name
     dest.mkdir(parents=True, exist_ok=True)
@@ -59,7 +71,7 @@ def propose_skill(
             )
             if resp.content:
                 body = resp.content
-        except (RuntimeError, OSError):
+        except (RuntimeError, OSError, LLMError, AnthropicError):
             pass
 
     fm = {

@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from pulse.llm.provider import LLMMessage, LLMProvider
+from pulse.llm.provider import AnthropicError, LLMError, LLMMessage, LLMProvider
 from pulse.skills.loader import SkillRecord
 from pulse.skills.registry import SkillRegistry
 
@@ -49,5 +49,5 @@ def select(registry: SkillRegistry, query: str, llm: Optional[LLMProvider] = Non
         name = resp.content.strip().split()[0].strip("`-")
         rec = registry.get(name)
         return [rec] if rec else []
-    except (RuntimeError, IndexError, AttributeError):
+    except (RuntimeError, IndexError, AttributeError, LLMError, AnthropicError):
         return []

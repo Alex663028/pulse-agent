@@ -29,8 +29,9 @@ from pulse.tools.registry import ToolRegistry
 
 
 def _est(text: str) -> int:
+    """Estimate token count from text (~3.2 chars/token, ~1.6 chars/token for CJK)."""
     cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
-    return max(1, cjk + (len(text) - cjk) // 4)
+    return max(1, cjk * 2 + (len(text) - cjk * 2) // 3)
 
 
 @dataclass
@@ -116,10 +117,10 @@ class Orchestrator:
         older_text = "\n".join(m.content for m in older_messages if m.content)
         if not older_text:
             return kept
-        # Use LLM summary if available, otherwise naive truncation
+        # Use LLM summary via Router (fallback chain + rate limiter)
         if self.router.primary:
             try:
-                resp = self.router.primary.chat([
+                resp = self.router.chat([
                     LLMMessage(role="system", content="Summarize the following conversation history into a concise brief. Keep key decisions, tool results, and facts. Be brief."),
                     LLMMessage(role="user", content=older_text[:8000]),
                 ], max_tokens=keep_tokens // 4)
@@ -207,7 +208,7 @@ class Orchestrator:
                 tool_actions = {t.get("action", "") for t in result.trajectory if t.get("action")}
                 if len(tool_actions) >= 2:  # used 2+ distinct tools
                     steps = [t["detail"].get("query") or t["action"] for t in result.trajectory]
-                    rec = propose_skill(task, [str(s) for s in steps], self.settings.skills_dir)
+                    rec = propose_skill(task, [str(s) for s in steps], self.settings.skills_dir, llm=self.router.primary, registry=self.registry)
                     self.registry.register(rec)
                     result.candidate_skill = rec.name
                     self.obs.emit("skill_proposed", skill=rec.name)

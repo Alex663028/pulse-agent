@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pulse.llm.provider import LLMMessage, LLMProvider
+from pulse.llm.provider import AnthropicError, LLMError, LLMMessage, LLMProvider
 
 
 def _naive_compact(text: str, keep_tokens: int) -> str:
-    # keep the most recent content that fits the budget (~4 chars/token)
-    budget_chars = max(200, keep_tokens * 4)
+    # keep the most recent content that fits the budget (~3.2 chars/token)
+    budget_chars = max(200, keep_tokens * 3)
     if len(text) <= budget_chars:
         return text
     head = text[: budget_chars // 3]
@@ -39,6 +39,6 @@ def compact(text: str, keep_tokens: int, llm: Optional[LLMProvider] = None) -> s
             )
             if resp.content:
                 return resp.content
-        except (RuntimeError, OSError):
+        except (RuntimeError, OSError, LLMError, AnthropicError):
             pass
     return _naive_compact(text, keep_tokens)
