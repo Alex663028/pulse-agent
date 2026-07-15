@@ -15,7 +15,7 @@ import json
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 
 @dataclass
@@ -106,6 +106,21 @@ class LLMProvider(ABC):
     ) -> LLMResponse:
         """Run a chat completion against the underlying model and return a normalized ``LLMResponse``."""
 
+    def chat_stream(
+        self,
+        messages: list[LLMMessage],
+        tools: Optional[list[dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Iterator[LLMResponse]:
+        """Yield incremental ``LLMResponse`` chunks (for streaming UIs).
+
+        Default implementation falls back to a single non-streaming ``chat()``
+        call. Providers that support streaming (OpenAI, Anthropic) should
+        override this.
+        """
+        yield self.chat(messages, tools=tools, tool_choice=tool_choice, **kwargs)
+
 
 def _estimate_tokens(text: str) -> int:
     # Cheap, deterministic approximation (~3.2 chars/token for English/code,
@@ -116,17 +131,16 @@ def _estimate_tokens(text: str) -> int:
 
 
 class OpenAICompatProvider(LLMProvider):
-    """Covers Ollama / vLLM / OpenRouter / OpenAI / DeepSeek / LiteLLM proxy."""
+    """OpenAI-compatible chat completions provider (OpenAI, Ollama, OpenRouter, DeepSeek, etc.)."""
 
     name = "openai-compat"
 
     def __init__(self, base_url: str, api_key: str = "", model: str = "", timeout: float = 120.0):
-        from openai import OpenAI
-
-        self.base_url = base_url
+        self.base_url = base_url.rstrip("/") if base_url else base_url
         self.api_key = api_key or "not-needed"
         self.model = model
-        self._client = OpenAI(base_url=base_url, api_key=self.api_key, timeout=timeout)
+        self.timeout = timeout
+        self._client = None
 
     def chat(
         self,
@@ -135,7 +149,7 @@ class OpenAICompatProvider(LLMProvider):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResponse:
-        """Send messages to the OpenAI-compatible endpoint and parse the response into ``LLMResponse`` (raises ``LLMError`` on transport failures)."""
+        """Send messages to the OpenAI-compatible endpoint."""
         payload: dict[str, Any] = {
             "model": kwargs.pop("model", self.model),
             "messages": [m.to_openai() for m in messages],
@@ -146,8 +160,11 @@ class OpenAICompatProvider(LLMProvider):
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice or "auto"
         try:
+            if self._client is None:
+                from openai import OpenAI
+                self._client = OpenAI(base_url=self.base_url, api_key=self.api_key, timeout=self.timeout)
             resp = self._client.chat.completions.create(**payload)
-        except Exception as e:  # network / rate-limit / 5xx -> recoverable
+        except Exception as e:
             raise LLMError(f"openai-compat request failed: {e}") from e
         choice = resp.choices[0]
         msg = choice.message
@@ -169,6 +186,49 @@ class OpenAICompatProvider(LLMProvider):
             usage=usage,
             finish_reason=choice.finish_reason or "stop",
         )
+
+    def chat_stream(
+        self,
+        messages: list[LLMMessage],
+        tools: Optional[list[dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Iterator[LLMResponse]:
+        """Stream chat completions (yields a final concatenated ``LLMResponse`` chunk per token — best-effort, non-OpenAI-endpoints fall back to non-streaming)."""
+        payload: dict[str, Any] = {
+            "model": kwargs.pop("model", self.model),
+            "messages": [m.to_openai() for m in messages],
+            "temperature": kwargs.get("temperature", 0.3),
+            "max_tokens": kwargs.get("max_tokens", 4096),
+            "stream": True,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice or "auto"
+        try:
+            if self._client is None:
+                from openai import OpenAI
+                self._client = OpenAI(base_url=self.base_url, api_key=self.api_key, timeout=self.timeout)
+            stream = self._client.chat.completions.create(**payload)
+            full_content = ""
+            for chunk in stream:
+                choice = chunk.choices[0] if chunk.choices else None
+                if choice and choice.delta.content:
+                    full_content += choice.delta.content
+                    yield LLMResponse(content=choice.delta.content)
+                if choice and choice.delta.tool_calls:
+                    for tc in choice.delta.tool_calls:
+                        args_str = getattr(tc.function, "arguments", "{}")
+                        try:
+                            args = json.loads(args_str) if args_str else {}
+                        except json.JSONDecodeError:
+                            args = {}
+                        yield LLMResponse(
+                            tool_calls=[ToolCall(id=tc.id, name=tc.function.name, arguments=args)],
+                        )
+        except Exception as e:
+            # fall back to non-streaming
+            yield self.chat(messages, tools=tools, tool_choice=tool_choice, **kwargs)
 
 
 class AnthropicProvider(LLMProvider):

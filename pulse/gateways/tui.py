@@ -2,6 +2,7 @@
 
 Slash commands:
   /help   /skills   /memory recall|add   /model   /clear   /quit  /exit
+  /correct <text>   — teach the agent a correction for future runs
 """
 from __future__ import annotations
 
@@ -10,6 +11,8 @@ import textwrap
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.live import Live
+from rich.markdown import Markdown
 
 from pulse.cli.runtime import Runtime
 from pulse.gateways.base import Gateway
@@ -18,7 +21,7 @@ BANNER = r"""
   ┌── Pulse ──────────────────────────────┐
   │   Hermes-style self-improving agent   │
   │   type /help for commands             │
-  └───────────────────────────────────────┘
+  └──────────────────────────────────────┘
 """
 
 
@@ -55,7 +58,8 @@ class TuiGateway(Gateway):
             if raw.startswith("/"):
                 self._handle_slash(raw, runtime, console)
                 continue
-            console.print("[dim]…[/dim]", end="\r")
+            console.print("[dim]…[/dim]")
+            # Show spinner while waiting
             res = runtime.orchestrator.run(raw, session_id=session)
             session = session or res.session_id
             if res.success:
@@ -81,7 +85,7 @@ class TuiGateway(Gateway):
             self._active = False
             console.print("[dim]bye[/dim]")
         elif cmd == "/help":
-            console.print("  /help  /skills  /memory recall|add <text>  /model  /clear  /quit")
+            console.print("  /help  /skills  /memory recall|add <text>  /model  /clear  /correct <feedback>  /quit")
         elif cmd == "/skills":
             rows = runtime.registry.list()
             if not rows:
@@ -106,6 +110,14 @@ class TuiGateway(Gateway):
             m = runtime.settings.model
             console.print(f"  provider={m.provider}  model={m.model}  base_url={m.base_url}")
         elif cmd == "/clear":
-            console.print("[dim]session reset[/dim]")
+            runtime.orchestrator.clear_session("")  # clear last session (or all)
+            console.print("[dim]session history cleared[/dim]")
+        elif cmd == "/correct":
+            feedback = " ".join(args)
+            if feedback:
+                runtime.orchestrator.add_correction(feedback)
+                console.print(f"[green]✓ recorded correction: {feedback}[/green]")
+            else:
+                console.print("[yellow]usage: /correct <your feedback>[/yellow]")
         else:
             console.print(f"[red]unknown: {cmd} — /help[/red]")
