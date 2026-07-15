@@ -30,6 +30,22 @@ Compatible with the [agentskills.io](https://agentskills.io) open standard.
 
 ---
 
+## Pulse vs Hermes
+
+Pulse is inspired by Nous Research's **Hermes Agent**, but rebuilt to fix the four things developers complain about most:
+
+| Dimension | Hermes Agent | Pulse |
+|---|---|---|
+| **Reliability** | Weak failure handling; long tasks break mid-flight | Every LLM/tool call wrapped in classified error recovery + exponential backoff + hard token-budget guardrail |
+| **Skill quality** | Auto-generated skills ship unverified; quality varies | Skills must pass a **golden-task replay** before promotion — `promote / quarantine / rollback` state machine with versioning |
+| **Onboarding** | Steep setup, high friction | `pulse init --yes` zero-config (built-in Ollama detection) + `pulse doctor` self-check |
+| **Cloud dependency** | Leans on remote services | **Fully self-hosted by default** — Ollama + local SQLite FTS5; any cloud API is opt-in |
+| **Extensibility** | — | **MCP** connects any stdio tool server; plugin sandbox + agentskills.io ecosystem compatible |
+
+In short: *the same autonomous, self-improving agent idea — but reliable, verified, and yours to run offline.*
+
+---
+
 ## Quick Start
 
 ```bash
