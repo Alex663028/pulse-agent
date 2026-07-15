@@ -29,7 +29,7 @@ from typing import Any, Optional
 try:
     from pulse import __version__
 except Exception:  # pragma: no cover - import safety
-    __version__ = "0.2.0"
+    __version__ = "0.3.0"
 
 from pulse.tools.base import Tool, ToolResult
 
