@@ -1,6 +1,8 @@
 """Shared runtime assembly for CLI commands."""
 from __future__ import annotations
 
+import logging
+import sys
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,7 +20,7 @@ from pulse.tools.registry import ToolRegistry
 
 @dataclass
 class Runtime:
-    """Container of wired-up services (settings, storage, memory, registry, tools, router, orchestrator) used by CLI/gateway commands."""
+    """Container of wired-up services used by CLI/gateway commands."""
 
     settings: Settings
     storage: Storage
@@ -32,14 +34,9 @@ class Runtime:
 
 
 def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
-    """Construct and wire together all Pulse services into a single ``Runtime`` instance.
-
-    ``load_mcp`` controls whether configured MCP servers are started and their
-    tools registered. It defaults to False so cheap commands (init, doctor,
-    config inspection) don't spin up subprocesses; interactive commands pass
-    True to make external MCP tools available to the orchestrator.
-    """
+    """Construct and wire together all Pulse services."""
     settings = load_settings(config_dir)
+    _setup_logging(settings.log_level)
     storage = Storage(settings.db_path)
     memory = MemoryStore(settings, storage)
     registry = SkillRegistry(settings, storage)
@@ -49,13 +46,25 @@ def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
     obs = Observability()
     orch = Orchestrator(router, memory, registry, tools, storage, settings, obs)
     rt = Runtime(settings, storage, memory, registry, tools, router, obs, orch)
-
     manager = None
     if load_mcp and settings.mcp_servers:
         from pulse.mcp import MCPManager
-
         manager = MCPManager(tools)
         manager.load_servers(settings.mcp_servers)
         rt.mcp = manager
-
     return rt
+
+
+def _setup_logging(level: str = "INFO") -> None:
+    """Configure root pulse logger with stderr handler."""
+    lvl = getattr(logging, level.upper(), logging.INFO)
+    logger = logging.getLogger("pulse")
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    logger.setLevel(lvl)
+    logger.addHandler(handler)

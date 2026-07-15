@@ -18,7 +18,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable, TypeVar
 
-from pulse.llm.provider import LLMError
+from pulse.llm.provider import LLMError, AnthropicError
 
 T = TypeVar("T")
 
@@ -45,7 +45,7 @@ def classify(exc: Exception) -> str:
     """Classify an exception into one of the ``ErrorClass`` categories for recovery routing."""
     if isinstance(exc, CtxOverflowError):
         return ErrorClass.CTX_OVERFLOW
-    if isinstance(exc, LLMError):
+    if isinstance(exc, (LLMError, AnthropicError)):
         msg = str(exc).lower()
         if any(k in msg for k in ("rate", "429", "timeout", "timed out", "connection", "503", "502", "500")):
             return ErrorClass.TRANSIENT
@@ -69,12 +69,20 @@ class RetryPolicy:
 
 def guarded(fn: Callable[..., T], *args, policy: RetryPolicy | None = None, allow: tuple[str, ...] = (ErrorClass.TRANSIENT,), on_tool_fail: Callable[[], None] | None = None, **kwargs) -> T:
     """Run ``fn`` with bounded retry. Only error classes in ``allow`` are
-    retried; everything else fails fast (fail-safe)."""
+    retried; everything else fails fast (fail-safe).
+
+    Programming errors (AttributeError, TypeError, NameError) are re-raised
+    immediately — they indicate bugs, not transient failures.
+    """
     policy = policy or RetryPolicy()
+    # These errors signal code bugs, not recoverable failures; surface immediately
+    _programming_errors = (AttributeError, TypeError, NameError, SyntaxError, ImportError)
     last: Exception | None = None
     for attempt in range(1, policy.max_attempts + 1):
         try:
             return fn(*args, **kwargs)
+        except _programming_errors:
+            raise  # don't wrap or retry — these are bugs
         except Exception as e:  # noqa: BLE001
             cls = classify(e)
             last = e

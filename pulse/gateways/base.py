@@ -61,7 +61,7 @@ class GatewayManager:
             except Exception:
                 pass
         for t in self._threads:
-            t.join(timeout=2)
+            t.join(timeout=5)
         self._threads.clear()
 
     def wait(self) -> None:

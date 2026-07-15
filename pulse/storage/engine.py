@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,7 +61,11 @@ def _now() -> str:
 
 
 class Storage:
-    """SQLite-backed storage for sessions, trajectories, evals, skill versions and FTS5 memory."""
+    """SQLite-backed storage for sessions, trajectories, evals, skill versions and FTS5 memory.
+
+    Thread-safe: all write operations (sessions, trajectories, memory indexing, skill versions)
+    are guarded by a lock so concurrent gateways (TUI + Telegram) can't corrupt the DB.
+    """
 
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
@@ -69,6 +74,7 @@ class Storage:
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
         self._conn.commit()
+        self._lock = threading.Lock()
 
     @staticmethod
     def has_fts5() -> bool:
@@ -82,12 +88,13 @@ class Storage:
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
-        try:
-            yield self._conn
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
+        with self._lock:
+            try:
+                yield self._conn
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
 
     # ---- sessions & trajectories ----
     def store_session(self, sid: str, summary: Optional[str] = None, token_usage: int = 0) -> None:

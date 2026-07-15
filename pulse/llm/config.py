@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pulse.config.settings import DEFAULT_BASE_URL, Settings, load_env
 from pulse.llm.provider import (
+    LLMError,
     LLMProvider,
     MockProvider,
     OpenAICompatProvider,
@@ -10,21 +11,27 @@ from pulse.llm.provider import (
 from pulse.llm.router import Router
 
 
-def _make_compat(settings: Settings, env: dict[str, str], provider: str) -> OpenAICompatProvider:
+def _make_compat(settings: Settings, env: dict[str, str], provider: str) -> LLMProvider:
     ms = settings.model
     if provider == "ollama":
         return OpenAICompatProvider(base_url=ms.base_url, api_key="", model=ms.model)
-    # cloud providers resolve base_url + key from env
+    if provider == "anthropic":
+        try:
+            from pulse.llm.provider import AnthropicProvider
+            key = env.get("ANTHROPIC_API_KEY") or env.get(settings.api_key_env, "")
+            return AnthropicProvider(
+                base_url=ms.base_url if ms.base_url and ms.base_url != DEFAULT_BASE_URL else "https://api.anthropic.com",
+                api_key=key,
+                model=ms.model or "claude-3-5-sonnet-20241022",
+            )
+        except ImportError:
+            raise LLMError("anthropic package not installed; pip install pulse-agent[anthropic]")
     key = env.get(settings.api_key_env) or env.get(f"{provider.upper()}_API_KEY", "")
     base_urls = {
         "openai": "https://api.openai.com/v1",
         "openrouter": "https://openrouter.ai/api/v1",
         "deepseek": "https://api.deepseek.com/v1",
     }
-    # Respect an EXPLICITLY-set base_url so Pulse can target any
-    # OpenAI-protocol-compatible endpoint (self-hosted gateways, proxies,
-    # alternative vendors, etc.). Only fall back to the official URL when
-    # base_url is unset or still at its default (the local Ollama address).
     if ms.base_url and ms.base_url != DEFAULT_BASE_URL:
         base = ms.base_url
     else:
@@ -33,7 +40,9 @@ def _make_compat(settings: Settings, env: dict[str, str], provider: str) -> Open
 
 
 def build_router(settings: Settings) -> Router:
-    """Construct a ``Router`` from settings: MockProvider for ``mock``, otherwise an OpenAICompatProvider chain including configured fallbacks."""
+    """Construct a Router from settings."""
+    from pulse.orchestrator.rate_limiter import RateLimiter
+
     env = load_env(settings)
     ms = settings.model
     if ms.provider == "mock":
@@ -44,6 +53,15 @@ def build_router(settings: Settings) -> Router:
     fallbacks: list[LLMProvider] = []
     for fb in ms.fallback:
         prov = fb.split(":", 1)[0]
-        if prov in ("ollama", "openai", "openrouter", "deepseek"):
+        if prov in ("ollama", "openai", "openrouter", "deepseek", "anthropic"):
             fallbacks.append(_make_compat(settings, env, prov))
-    return Router(primary=primary, fallbacks=fallbacks)
+
+    limiter = RateLimiter(default_rate=1.0, default_burst=5)
+    if ms.provider == "ollama":
+        limiter.configure(ms.provider, rate=10.0, burst=20)
+    elif ms.provider == "openrouter":
+        limiter.configure(ms.provider, rate=2.0, burst=10)
+    elif ms.provider == "anthropic":
+        limiter.configure(ms.provider, rate=1.0, burst=5)
+
+    return Router(primary=primary, fallbacks=fallbacks, rate_limiter=limiter)

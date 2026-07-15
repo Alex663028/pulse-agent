@@ -60,6 +60,7 @@ class Settings(BaseModel):
     api_key_env: str = ""
     auto_evolve: bool = True
     max_session_tokens: int = 12000
+    max_iterations: int = 20
     log_level: str = "INFO"
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
 

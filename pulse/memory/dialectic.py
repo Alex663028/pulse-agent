@@ -43,17 +43,20 @@ class DialecticEngine:
         self.llm = llm
         self._version_dir = memory.settings.memory_dir
 
-    def reflect(self) -> str:
+    def reflect(self, max_input_tokens: int = 3000) -> str:
         """Run one dialectical cycle. Returns the new USER.md content."""
         profile = self.memory.read_user()
         sessions = self._recent_sessions(limit=20)
         evidence = "\n\n".join(
-            f"[session {s.get('id','?')[:12]}] {s.get('summary','')[:300]}"
+            f"[session {s.get('id','?')[:12]}] {s.get('summary','')[:200]}"
             for s in sessions
             if s.get("summary")
-        )
+        )[:2000]
         if not evidence:
             return profile  # nothing to reflect on
+        profile_budget = max_input_tokens - len(evidence) // 4
+        if len(profile) > profile_budget * 4:
+            profile = profile[:profile_budget * 4]
 
         try:
             resp = self.llm.chat(

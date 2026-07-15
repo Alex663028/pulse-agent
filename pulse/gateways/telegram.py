@@ -76,7 +76,7 @@ class TelegramGateway(Gateway):
                     continue
                 self._call("sendChatAction", {"chat_id": chat_id, "action": "typing"})
                 try:
-                    res = runtime.orchestrator.run(text)
+                    res = runtime.orchestrator.run(text, session_id=f"tg:{chat_id}")
                 except (RuntimeError, OSError, ValueError) as e:
                     self._send(chat_id, f"error: {e}")
                     continue

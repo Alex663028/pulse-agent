@@ -69,7 +69,7 @@ class TeamOrchestrator:
         subs = decompose(task, llm=primary)
         feedback = ""
         for round_n in range(1, self.max_rounds + 1):
-            # ---- BUILD ----
+            # ---- BUILD (parallel) ----
             ctx = f"(the reviewer returned feedback: {feedback})" if feedback else ""
             sub_tasks = [
                 SubagentTask(
@@ -80,21 +80,12 @@ class TeamOrchestrator:
                 )
                 for i, s in enumerate(subs)
             ]
-            # Use a builder-prompted call for each sub-task
-            builder_results: list[SubagentResult] = []
-            for st in sub_tasks:
-                try:
-                    resp = primary.chat(
-                        [
-                            LLMMessage(role="system", content=BUILDER_SYSTEM),
-                            LLMMessage(role="user", content=f"TASK: {st.description}\n{st.context}"),
-                        ]
-                    )
-                    builder_results.append(
-                        SubagentResult(task_id=st.id, success=bool(resp.content), answer=resp.content, tokens=resp.usage.total or 0)
-                    )
-                except Exception as e:
-                    builder_results.append(SubagentResult(task_id=st.id, success=False, error=str(e)))
+            # Use SubagentPool for parallel execution instead of sequential calls
+            builder_results: list[SubagentResult] = self.pool.run(
+                sub_tasks, primary, tools
+            )
+            if not builder_results:
+                break
 
             # ---- REVIEW ----
             builder_output = "\n\n---\n\n".join(

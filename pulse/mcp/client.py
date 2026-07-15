@@ -232,6 +232,9 @@ class MCPClient:
             logger.debug(f"error stopping MCP server: {e}")
         finally:
             self._proc = None
+        # Join stdout reader thread to avoid resource leak
+        if hasattr(self, '_read_thread') and self._read_thread and self._read_thread.is_alive():
+            self._read_thread.join(timeout=3)
 
     # -- context manager ---------------------------------------------------
     def __enter__(self) -> "MCPClient":

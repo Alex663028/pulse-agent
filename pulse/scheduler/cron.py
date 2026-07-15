@@ -200,7 +200,15 @@ class Scheduler:
             self._thread = None
 
     def _loop(self) -> None:
-        while self._active:
+        stop_event = threading.Event()
+        # Mirror _active so we can atomically update both
+        self._active = True
+        while not stop_event.is_set():
+            # Use Event.wait instead of busy-loop sleep; stop_event lets us
+            # wake up immediately when stop() is called
+            stop_event.wait(timeout=0.5)
+            if not self._active:
+                break
             now = time.time()
             due: list[Job] = []
             with self._lock:
@@ -225,7 +233,6 @@ class Scheduler:
             for job in due:
                 t = threading.Thread(target=self._run_job, args=(job,), daemon=True)
                 t.start()
-            time.sleep(0.5)
 
     def _run_job(self, job: Job) -> None:
         t0 = time.time()

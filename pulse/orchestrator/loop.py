@@ -37,7 +37,7 @@ def _est(text: str) -> int:
 class OrchestratorConfig:
     """Tunables for the orchestration loop (max iterations, self-evolution toggle)."""
 
-    max_iterations: int = 8
+    max_iterations: int = 20  # bumped from 8 — complex multi-tool tasks need more steps
     auto_evolve: bool = True
 
 
@@ -92,9 +92,45 @@ class Orchestrator:
         if mem:
             parts.append(f"## Memory (MEMORY.md)\n{mem[:1500]}")
         if skills:
-            sk = "\n\n".join(f"### {s.title}\n{s.description}\n{s.body[:600]}" for s in skills)
-            parts.append(f"## Available skills\n{sk}")
+            # Only inject skill name + description to save context; full body loaded on demand
+            sk_lines = []
+            for s in skills:
+                sk_lines.append(f"- **{s.name}**: {s.description[:200]}")
+            parts.append(f"## Available skills\n{chr(10).join(sk_lines)}")
         return "\n\n".join(parts)
+
+    def _compact_messages(self, messages: list[LLMMessage], keep_tokens: int) -> list[LLMMessage]:
+        """Compact messages while preserving the system prompt and recent tool results.
+
+        Strategy: keep system prompt + keep most recent ``keep_n`` messages,
+        summarize the rest. This preserves tool call results and conversation
+        flow that a naive text join would lose.
+        """
+        keep_n = 6  # keep last 6 messages as-is (covers system + recent turns)
+        if len(messages) <= keep_n:
+            return messages
+        # Keep system prompt + recent messages
+        kept = messages[:1] + messages[-(keep_n - 1):]
+        # Summarize older messages
+        older_messages = messages[1:-keep_n + 1] if len(messages) > keep_n else messages[1:]
+        older_text = "\n".join(m.content for m in older_messages if m.content)
+        if not older_text:
+            return kept
+        # Use LLM summary if available, otherwise naive truncation
+        if self.router.primary:
+            try:
+                resp = self.router.primary.chat([
+                    LLMMessage(role="system", content="Summarize the following conversation history into a concise brief. Keep key decisions, tool results, and facts. Be brief."),
+                    LLMMessage(role="user", content=older_text[:8000]),
+                ], max_tokens=keep_tokens // 4)
+                summary = resp.content or f"[summarized {len(older_messages)} older messages]"
+            except Exception:
+                summary = f"[summarized {len(older_messages)} older messages]"
+        else:
+            summary = f"[summarized {len(older_messages)} older messages]"
+        # Insert summary between system prompt and recent messages
+        summary_msg = LLMMessage(role="user", content="[context compacted]\n" + summary)
+        return [kept[0], summary_msg, *kept[1:]]
 
     def _total_tokens(self, messages: list[LLMMessage]) -> int:
         return sum(_est(m.content) + sum(_est(tc.arguments.__str__()) for tc in m.tool_calls) for m in messages)
@@ -121,10 +157,9 @@ class Orchestrator:
         tool_schemas = self.tools.schemas()
 
         for step in range(self.config.max_iterations):
-            # context guardrail
+            # context guardrail — compact only old messages, keep recent tool results
             if budget.over_soft:
-                compacted = budget.fit("\n".join(m.content for m in messages), keep_tokens=self.settings.max_session_tokens // 4, llm=self.router.primary)
-                messages = [messages[0], LLMMessage(role="user", content=f"[context compacted]\n{compacted}")]
+                messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
             try:
                 resp = guarded(
                     self.router.chat,
@@ -133,8 +168,7 @@ class Orchestrator:
                     allow=(ErrorClass.TRANSIENT,),
                 )
             except CtxOverflowError:
-                compacted = budget.fit("\n".join(m.content for m in messages), keep_tokens=self.settings.max_session_tokens // 4, llm=self.router.primary)
-                messages = [messages[0], LLMMessage(role="user", content=f"[context compacted]\n{compacted}")]
+                messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
                 continue
             except Exception as e:  # noqa: BLE001
                 self.obs.error(classify(e), str(e))
@@ -167,13 +201,16 @@ class Orchestrator:
                 used_skills=result.used_skills,
                 data={"task": task, "trajectory": result.trajectory, "answer": resp.content},
             )
-            # self-evolution: propose a candidate skill after a complex success
-            if self.config.auto_evolve and result.trajectory:
-                steps = [t["detail"].get("query") or t["action"] for t in result.trajectory]
-                rec = propose_skill(task, [str(s) for s in steps], self.settings.skills_dir)
-                self.registry.register(rec)
-                result.candidate_skill = rec.name
-                self.obs.emit("skill_proposed", skill=rec.name)
+            # self-evolution: only propose a candidate skill after a complex success
+            # skip trivial runs: single tool call or no tools used produces low-quality skills
+            if self.config.auto_evolve and len(result.trajectory) >= 3:
+                tool_actions = {t.get("action", "") for t in result.trajectory if t.get("action")}
+                if len(tool_actions) >= 2:  # used 2+ distinct tools
+                    steps = [t["detail"].get("query") or t["action"] for t in result.trajectory]
+                    rec = propose_skill(task, [str(s) for s in steps], self.settings.skills_dir)
+                    self.registry.register(rec)
+                    result.candidate_skill = rec.name
+                    self.obs.emit("skill_proposed", skill=rec.name)
             return result
 
         result.error = "max iterations reached without a final answer"

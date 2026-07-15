@@ -95,8 +95,8 @@ def test_orchestrator_tool_loop_and_evolution():
     res = rt.orchestrator.run("compute this [call:calc] 2+3")
     assert res.success is True
     assert any(t["action"].startswith("tool:calc") for t in res.trajectory)
-    # auto-evolution should have proposed a candidate skill after a tool-using success
-    assert res.candidate_skill is not None
+    # Single tool call is too trivial for auto-evolution (needs ≥3 steps + 2+ tools)
+    assert res.candidate_skill is None
 
 
 def test_mock_provider_no_tool_loop():

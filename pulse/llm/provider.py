@@ -78,9 +78,17 @@ class LLMResponse:
     usage: Usage = field(default_factory=Usage)
     finish_reason: str = "stop"
 
+    @property
+    def has_tool_calls(self) -> bool:
+        return len(self.tool_calls) > 0
+
 
 class LLMError(Exception):
     """Raised by providers; classified by the orchestrator's recovery layer."""
+
+
+class AnthropicError(Exception):
+    """Raised by Anthropic provider."""
 
 
 class LLMProvider(ABC):
@@ -100,11 +108,11 @@ class LLMProvider(ABC):
 
 
 def _estimate_tokens(text: str) -> int:
-    # Cheap, deterministic approximation (~4 chars/token for English/code,
+    # Cheap, deterministic approximation (~3.2 chars/token for English/code,
     # ~1.6 for CJK). Good enough for a budget guardrail, not for billing.
     cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
     other = len(text) - cjk
-    return max(1, cjk + other // 4)
+    return max(1, cjk + int(other / 3.2))  # ~3.2 chars/token for English (was 4)
 
 
 class OpenAICompatProvider(LLMProvider):
@@ -163,6 +171,151 @@ class OpenAICompatProvider(LLMProvider):
         )
 
 
+class AnthropicProvider(LLMProvider):
+    """Anthropic Messages API provider (Claude).
+
+    Falls back to OpenAI protocol for non-Anthropic endpoints that
+    mimic Anthropic's tool-use format (e.g. some local proxies).
+    """
+
+    name = "anthropic"
+
+    def __init__(
+        self,
+        base_url: str = "https://api.anthropic.com",
+        api_key: str = "",
+        model: str = "claude-3-5-sonnet-20241022",
+        max_tokens: int = 4096,
+        api_mode: str = "messages",
+    ):
+        self.base_url = base_url
+        self.api_key = api_key
+        self.model = model
+        self.max_tokens = max_tokens
+        self.api_mode = api_mode  # "messages" (Anthropic native) or "openai" (fallback)
+        self._client = None
+
+    def _ensure_client(self):
+        """Lazily create the anthropic client on first use."""
+        if self._client is None:
+            try:
+                import anthropic  # noqa: F811
+                self._client = anthropic.Anthropic(base_url=self.base_url, api_key=self.api_key)
+            except ImportError:
+                self._client = "import_error"
+
+    def chat(
+        self,
+        messages: list[LLMMessage],
+        tools: Optional[list[dict[str, Any]]] = None,
+        tool_choice: Optional[str] = None,
+        **kwargs: Any,
+    ) -> LLMResponse:
+        self._ensure_client()
+        if self._client == "import_error":
+            raise LLMError("anthropic package not installed; pip install anthropic>=0.25")
+        if self._client is None:
+            raise LLMError("Anthropic client not initialized")
+
+        # Build Anthropic system message from the system message if present
+        system = ""
+        filtered_messages: list[LLMMessage] = []
+        for m in messages:
+            if m.role == "system":
+                system = m.content
+            else:
+                filtered_messages.append(m)
+
+        # Convert tool definitions to Anthropic tool format
+        anthropic_tools = []
+        if tools:
+            for tool_def in tools:
+                fn = tool_def.get("function", tool_def)
+                param_schema = fn.get("parameters", {"type": "object", "properties": {}})
+                anthropic_tools.append({
+                    "name": fn.get("name", ""),
+                    "description": fn.get("description", ""),
+                    "input_schema": param_schema,
+                })
+
+        # Build conversation messages
+        conversation = []
+        for m in filtered_messages:
+            if m.role == "user":
+                conversation.append({"role": "user", "content": m.content or ""})
+            elif m.role == "assistant":
+                block = {"type": "text", "text": m.content or ""}
+                if m.tool_calls:
+                    for tc in m.tool_calls:
+                        conversation.append({
+                            "role": "assistant",
+                            "content": [
+                                {"type": "text", "text": m.content} if m.content else {"type": "text", "text": ""},
+                                {
+                                    "type": "tool_use",
+                                    "id": tc.id,
+                                    "name": tc.name,
+                                    "input": tc.arguments,
+                                },
+                            ],
+                        })
+                else:
+                    conversation.append({"role": "assistant", "content": [block]})
+            elif m.role == "tool":
+                conversation.append({
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": m.tool_call_id or "",
+                            "content": m.content or "",
+                        }
+                    ],
+                })
+
+        # Invoke the Anthropic API
+        try:
+            kwargs.setdefault("max_tokens", self.max_tokens)
+            kwargs.setdefault("model", self.model)
+            if tools:
+                kwargs["tools"] = anthropic_tools
+            if tool_choice:
+                kwargs["tool_choice"] = (
+                    {"type": "auto"} if tool_choice == "auto"
+                    else {"type": "tool", "name": tool_choice} if tool_choice == "tool"
+                    else tool_choice
+                )
+
+            resp = self._client.messages.create(
+                system=system,
+                messages=conversation,
+                **kwargs,
+            )
+
+            # Convert Anthropic response to normalized LLMResponse
+            tool_calls = []
+            content_text = ""
+            for block in resp.content:
+                if block.type == "text":
+                    content_text += block.text
+                elif block.type == "tool_use":
+                    tool_calls.append(ToolCall(
+                        id=block.id,
+                        name=block.name,
+                        arguments=block.input or {},
+                    ))
+
+            return LLMResponse(
+                content=content_text,
+                tool_calls=tool_calls,
+                model=self.model,
+                finish_reason=resp.stop_reason or "stop",
+            )
+
+        except Exception as e:
+            raise AnthropicError(f"Anthropic API error: {e}") from e
+
+
 class MockProvider(LLMProvider):
     """Offline provider.
 
@@ -187,7 +340,11 @@ class MockProvider(LLMProvider):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResponse:
-        """Return a scripted/deterministic response, optionally emitting a tool call hinted by ``[call:name]`` in the user turn."""
+        """Return a scripted/deterministic response, optionally emitting a tool call hinted by ``[call:name]`` in the user turn.
+
+        ``_last_tool`` now tracks the last emitted tool; sessions can reset it
+        by passing ``mock_reset=True`` in kwargs (not required for most tests).
+        """
         self.calls.append(list(messages))
         last_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
         if self.scripted:
