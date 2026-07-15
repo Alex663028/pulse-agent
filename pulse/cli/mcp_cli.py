@@ -19,19 +19,33 @@ def _load_settings():
 
 
 def cmd_list(settings) -> None:
-    """List configured MCP servers."""
+    """List configured MCP servers with live tool count and health status."""
+    from pulse.mcp import probe_server
+
     servers = settings.mcp_servers
     if not servers:
         console.print("[yellow]No MCP servers configured.[/yellow]")
-        console.print("Add one with: [bold]pulse mcp add <name> <command> [args...][/bold]")
+        console.print('Add one with: [bold]pulse mcp add <name> "npx -y <pkg> <args...>"[/bold]')
         return
     table = Table(title="MCP Servers")
     table.add_column("Name", style="cyan")
     table.add_column("Command")
     table.add_column("Args")
     table.add_column("Enabled")
+    table.add_column("Tools")
+    table.add_column("Status")
     for s in servers:
-        table.add_row(s.name, s.command, " ".join(s.args), "yes" if s.enabled else "no")
+        if not s.enabled:
+            table.add_row(s.name, s.command, " ".join(s.args), "no", "-", "disabled")
+            continue
+        try:
+            ok, n, detail = probe_server(s, timeout=4.0)
+        except Exception as e:  # noqa: BLE001
+            ok, n, detail = False, 0, str(e)
+        if ok:
+            table.add_row(s.name, s.command, " ".join(s.args), "yes", str(n), f"[green]ok ({n} tool(s))[/green]")
+        else:
+            table.add_row(s.name, s.command, " ".join(s.args), "yes", "?", f"[red]unreachable: {detail}[/red]")
     console.print(table)
 
 

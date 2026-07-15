@@ -16,7 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI** (`pulse mcp list|add|remove|test|export`): full lifecycle management of MCP server configs (persisted in `config.yaml`, secrets stay in `.env`).
 - **Runtime integration**: `bootstrap(load_mcp=True)` automatically connects configured servers for `chat`, `tui`, `serve`, `fork`, `team`.
 - **`pulse doctor`** now probes each enabled MCP server (reachability + tool count).
-- 14 new tests (client init/list/call, adapter, manager, CLI round-trip, config_dir regression). 107 → 121 total.
+
+### Improved — MCP reliability & UX
+- **Lazy, parallel discovery**: `MCPManager.load_servers()` probes every enabled server in parallel to fetch tool specs, then disconnects — servers are only (re)spawned on first actual tool use, so startup no longer blocks on N server launches.
+- **Automatic reconnection**: `MCPManager.ensure_connected()`/`reconnect()` detect a dead server process and reconnect transparently on the next call.
+- **Argument validation**: `validate_tool_args()` checks each MCP tool call against the server's `inputSchema` (required fields + JSON types) before sending, returning a clean error instead of a server-side failure.
+- **`pulse mcp list`** now shows a live health check per server: tool count and `ok` / `unreachable` status.
+- Shared `probe_server()` helper used by both `mcp list` and `doctor` (no duplicated connection logic).
+- `MCPClient` gained `is_alive()` and a context-manager protocol; `MCPTool` supports a lazy `manager` mode alongside the existing eager `client` mode.
+
+### Fixed
+- `load_settings()` now carries the requested `config_dir` through when a `config.yaml` already exists, so subsequent `save_settings()` writes to the correct location (previously reverted to the default `~/.pulse` and silently dropped changes).
+
+### Stats
+- 23 MCP/doctor tests (client, adapter, manager, CLI round-trip, lazy connect, reconnect, validation, health). 107 → 130 total.
 
 ### Fixed
 - `load_settings()` now carries the requested `config_dir` through when a `config.yaml` already exists, so subsequent `save_settings()` writes to the correct location (previously reverted to the default `~/.pulse` and silently dropped changes).

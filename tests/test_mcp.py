@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from pulse.config.settings import MCPServerConfig, Settings
-from pulse.mcp import MCPClient, MCPManager, MCPTool
+from pulse.mcp import MCPClient, MCPManager, MCPTool, probe_server, validate_tool_args
 from pulse.tools.base import ToolResult
 from pulse.tools.registry import ToolRegistry
 
@@ -218,3 +218,94 @@ def test_cli_mcp_add_parses_quoted_invocation(tmp_path):
     assert result.exit_code == 0, result.output
     servers = load_settings(tmp_path).mcp_servers
     assert any(s.name == "fs" and s.command == "npx" and "-y" in s.args for s in servers)
+
+
+def test_validate_tool_args():
+    schema = {
+        "type": "object",
+        "properties": {"msg": {"type": "string"}, "n": {"type": "integer"}},
+        "required": ["msg"],
+    }
+    assert validate_tool_args(schema, {"msg": "hi"}) is None
+    assert "missing required" in validate_tool_args(schema, {})
+    assert "must be string" in validate_tool_args(schema, {"msg": 123})
+    assert "must be integer" in validate_tool_args(schema, {"msg": "x", "n": "no"})
+    # Extra/unknown args are allowed; only declared props are type-checked.
+    assert validate_tool_args(schema, {"msg": "x", "extra": 1}) is None
+    # No schema -> nothing to validate.
+    assert validate_tool_args(None, {}) is None
+
+
+def test_mcptool_adapter_validates_args(client):
+    specs = client.list_tools()
+    echo_spec = next(s for s in specs if s["name"] == "echo")
+    tool = MCPTool(client, echo_spec, server_name="mock")
+    # missing required "msg"
+    res = tool.run()
+    assert res.ok is False
+    assert "missing required" in res.error
+    # valid call still works
+    res = tool.run(msg="ping")
+    assert res.ok and res.output == "ping"
+
+
+def test_manager_lazy_connect_and_disconnect():
+    """Servers must NOT be subprocess-connected right after load_servers;
+    they connect lazily on first tool use and disconnect on shutdown."""
+    reg = ToolRegistry()
+    mgr = MCPManager(reg)
+    cfg = MCPServerConfig(name="demo", command=PY, args=[FIXTURE], enabled=True)
+    mgr.load_servers([cfg])
+    # Not connected yet (lazy).
+    assert mgr._clients == {}
+    # First invocation connects on demand.
+    res = reg.call("demo__echo", {"msg": "lazy"})
+    assert res.ok and res.output == "lazy"
+    assert "demo" in mgr._clients and mgr._clients["demo"].is_alive()
+    mgr.shutdown()
+    assert mgr._clients == {}
+
+
+def test_manager_reconnect_on_crash():
+    """If a server process dies, the next tool call reconnects transparently."""
+    reg = ToolRegistry()
+    mgr = MCPManager(reg)
+    cfg = MCPServerConfig(name="demo", command=PY, args=[FIXTURE], enabled=True)
+    mgr.load_servers([cfg])
+    assert reg.call("demo__echo", {"msg": "first"}).ok
+    # Kill the underlying subprocess.
+    proc = mgr._clients["demo"]._proc
+    proc.kill()
+    proc.wait()
+    assert not mgr._clients["demo"].is_alive()
+    # Next call should reconnect and succeed.
+    res = reg.call("demo__echo", {"msg": "reconnected"})
+    assert res.ok and res.output == "reconnected"
+    mgr.shutdown()
+
+
+def test_probe_server():
+    good = MCPServerConfig(name="mock", command=PY, args=[FIXTURE], enabled=True)
+    ok, n, detail = probe_server(good, timeout=5.0)
+    assert ok is True
+    assert n == 2
+    assert "tool" in detail
+
+    bad = MCPServerConfig(name="bad", command="this_command_does_not_exist_xyz", args=[], enabled=True)
+    ok, n, detail = probe_server(bad, timeout=5.0)
+    assert ok is False
+    assert n == 0
+    assert detail
+
+
+def test_cli_mcp_list_shows_health(tmp_path, capsys):
+    from pulse.cli.mcp_cli import cmd_add, cmd_list
+    from pulse.config.settings import load_settings
+
+    s = load_settings(tmp_path)
+    cmd_add(s, "mock", PY, [FIXTURE])
+    cmd_list(load_settings(tmp_path))
+    out = capsys.readouterr().out
+    assert "mock" in out
+    assert "ok" in out
+    assert "tool(s)" in out

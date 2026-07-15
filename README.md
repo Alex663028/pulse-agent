@@ -272,7 +272,18 @@ pulse mcp export > mcp-servers.json
 pulse mcp remove fs
 ```
 
-Configured servers are stored in `~/.pulse/config.yaml` (never the `.env` secrets file). Interactive commands (`chat`, `tui`, `serve`, `fork`, `team`) automatically start enabled servers and register their tools before running.
+Configured servers are stored in `~/.pulse/config.yaml` (never the `.env` secrets file). Interactive commands (`chat`, `tui`, `serve`, `fork`, `team`) wire MCP tools into the orchestrator automatically.
+
+**How it works (reliability-first):**
+
+- **Lazy, parallel discovery** — on startup Pulse probes every enabled server *in parallel* to fetch its tool list, then disconnects. Servers are only (re)spawned on demand, the first time one of their tools is actually invoked, so startup stays fast even with many servers.
+- **Automatic reconnection** — if a server process crashes mid-session, the next tool call transparently reconnects.
+- **Argument validation** — tool calls are checked against each server's `inputSchema` (required fields + JSON types) before being sent, so mistakes surface as clean errors instead of server-side failures.
+- **`pulse mcp list`** shows a live health check per server: tool count and `ok` / `unreachable` status.
+
+```bash
+pulse mcp list     # live tool count + health per server
+```
 
 `pulse doctor` also probes each enabled MCP server so you can spot a broken config at a glance.
 
@@ -282,7 +293,7 @@ Configured servers are stored in `~/.pulse/config.yaml` (never the `.env` secret
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q   # 120 tests, all pass
+python -m pytest -q   # 130 tests, all pass
 ```
 
 Tests cover: agentskills.io skill loading | evaluation loop (promote/deprecate/rollback) |
