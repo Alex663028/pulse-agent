@@ -19,8 +19,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
-from abc import ABC
 from typing import Any
 
 from pulse.cli.runtime import Runtime
@@ -80,7 +78,6 @@ class FeishuGateway(Gateway):
             msg = event.get("message", {})
             sender = event.get("sender", {})
             msg_type = msg.get("message_type", "")
-            msg_id = msg.get("message_id", "")
             chat_id = msg.get("chat_id", "")
 
             # Only process text messages
@@ -91,7 +88,7 @@ class FeishuGateway(Gateway):
                 if text:
                     # Send typing indicator
                     try:
-                        self._send(chat_id, f"Pulse 正在思考…", msg_type="interactive")
+                        self._send(chat_id, "Pulse 正在思考…", msg_type="interactive")
                     except Exception:
                         pass
                     # Route through orchestrator
@@ -114,7 +111,7 @@ class FeishuGateway(Gateway):
         chunks = [text[i:i+2048] for i in range(0, max(len(text), 1), 2048)]
 
         for chunk in chunks:
-            url = f"https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id"
+            url = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id"
             data = json.dumps({
                 "receive_id": chat_id,
                 "msg_type": msg_type,
@@ -177,9 +174,8 @@ class WechatGateway(Gateway):
         if not self._encoding_aes_key:
             return encrypted
         try:
-            from wechatpy.crypto import WeChatCrypto
-            # ... full decryption using wechatpy
-            return encrypted  # placeholder if lib not installed
+            from wechatpy.crypto import WeChatCrypto  # noqa: F401
+            return encrypted
         except ImportError:
             logger.error("wechatpy required for decrypt. pip install wechatpy")
             return encrypted
