@@ -4,7 +4,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-73%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.3.1-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.3.1)
+[![Release](https://img.shields.io/badge/release-v0.4.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.4.0)
 
 A **self-improving personal AI agent** with a reliability-first core.
 Compatible with the [agentskills.io](https://agentskills.io) open standard.
@@ -16,30 +16,34 @@ Compatible with the [agentskills.io](https://agentskills.io) open standard.
 
 | Advantage | Detail |
 |---|---|
-| **Reliability-first orchestration** | Every LLM/tool call wrapped in classified error recovery + exponential backoff + hard token budget guardrail |
-| **Evaluated skill self-evolution** | Auto-generated skills must pass golden-task replay before promotion. `promote / quarantine / rollback` state machine with versioning |
+| **Reliability-first orchestration** | Every LLM/tool call wrapped in classified error recovery + exponential backoff + hard token budget guardrail. Bad responses trigger automatic provider fallback. |
+| **Provider diversity** | OpenAI-compat, Anthropic (Claude), Ollama, OpenRouter, DeepSeek — with a fallback chain + token-bucket rate limiter |
+| **Evaluated skill self-evolution** | Auto-generated skills must pass golden-task replay before promotion. Only triggers on complex multi-tool tasks. `promote / quarantine / rollback` state machine with versioning |
 | **Zero-config onboarding** | `pulse init --yes` with built-in Ollama detection, Rich visual feedback, starter skills, `pulse doctor` self-check |
 | **Fully self-hosted** | Default Ollama + local SQLite FTS5; any cloud API is opt-in — no mandatory external service |
 | **Multi-agent orchestration** | Sub-agent parallel pool with failure isolation + result merge; Builder→Reviewer→Ship team pipeline |
-| **Dialectic user modeling** | Self-hosted replacement for Honcho — thesis → antithesis → synthesis profiling with versioned rollbacks |
+| **Dialectic user modeling** | Self-hosted replacement for Honcho — thesis → antithesis → synthesis profiling with input budget and versioned rollbacks |
 | **Agentskills.io compatible** | Load and run skills from the ecosystem without modification |
 | **Plugin sandbox** | Import isolation + permission whitelist; plugins declare `__permissions__` and run in restricted execution context |
 | **RL training data pipeline** | Export execution trajectories in ChatML JSONL or ShareGPT format for fine-tuning |
 | **Cron scheduling** | Natural-language scheduling (`"every 5 min"`, `"daily at 8am"`) + standard cron expressions + pause/resume with execution history |
 | **MCP integration** | Connect any stdio Model Context Protocol server — its tools become first-class Pulse tools, zero SDK dependency |
+| **Health endpoint** | `pulse health --port 8080` — lightweight HTTP health check for Docker/container deployments |
 
 ---
 
 ## Pulse vs Hermes
 
-Pulse is inspired by Nous Research's **Hermes Agent**, but rebuilt to fix the four things developers complain about most:
+Pulse is inspired by Nous Research's **Hermes Agent**, but rebuilt to fix the issues developers complain about most:
 
 | Dimension | Hermes Agent | Pulse |
 |---|---|---|
-| **Reliability** | Weak failure handling; long tasks break mid-flight | Every LLM/tool call wrapped in classified error recovery + exponential backoff + hard token-budget guardrail |
-| **Skill quality** | Auto-generated skills ship unverified; quality varies | Skills must pass a **golden-task replay** before promotion — `promote / quarantine / rollback` state machine with versioning |
+| **Reliability** | Weak failure handling; long tasks break mid-flight | Every LLM/tool call wrapped in classified error recovery + exponential backoff + hard token-budget guardrail. Bad responses auto-fallback. |
+| **Skill quality** | Auto-generated skills ship unverified; quality varies | Skills must pass a **golden-task replay** before promotion. Only complex multi-tool tasks trigger evolution. |
+| **Provider support** | Limited | OpenAI, Anthropic (Claude), Ollama, OpenRouter, DeepSeek — with fallback chain + rate limiter |
 | **Onboarding** | Steep setup, high friction | `pulse init --yes` zero-config (built-in Ollama detection) + `pulse doctor` self-check |
 | **Cloud dependency** | Leans on remote services | **Fully self-hosted by default** — Ollama + local SQLite FTS5; any cloud API is opt-in |
+| **Concurrent safety** | — | Thread-safe storage; per-user Telegram sessions; token-bucket rate limiter |
 | **Extensibility** | — | **MCP** connects any stdio tool server; plugin sandbox + agentskills.io ecosystem compatible |
 
 In short: *the same autonomous, self-improving agent idea — but reliable, verified, and yours to run offline.*
@@ -84,8 +88,8 @@ graph TD
     ORCH --> TOOLS["Tools / MCP"]
     ORCH --> OBS["Observability"]
 
-    LLM --> P["OpenAI-compat / Anthropic / Ollama / Mock"]
-    LLM --> ROUTER["Router (primary + fallback chain)"]
+    LLM --> P["OpenAI / Anthropic / Ollama / OpenRouter / DeepSeek / Mock"]
+    LLM --> ROUTER["Router (fallback + rate limiter)"]
 
     MEM --> FTS5["SQLite FTS5"]
     MEM --> DIALECTIC["Dialectic Profiling"]
@@ -109,11 +113,15 @@ graph TD
     ORCH --> TEAM["Team Pipeline"]
     ORCH --> CRON["Scheduler"]
     ORCH --> RL["RL Export"]
+    ORCH --> RATE["Rate Limiter"]
+    ORCH --> HEALTH["Health Endpoint"]
 
     subgraph Reliability Layer
         RECOVERY["Error Recovery"]
         BUDGET["Token Budget"]
         OBS
+        RATE
+        COMPACTOR
     end
 
     ORCH --> RECOVERY
@@ -128,7 +136,7 @@ graph TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> candidate: skill proposed
+    [*] --> candidate: skill proposed (complex task only)
     candidate --> promoted: eval pass (≥60% success)
     candidate --> deprecated: eval fail
     promoted --> quarantined: eval regression (>15% drop)
@@ -142,7 +150,7 @@ stateDiagram-v2
 
 ```mermaid
 graph LR
-    TASK["Complex Task"] --> BUILDER["Builder Agent(s)"]
+    TASK["Complex Task"] --> BUILDER["Builder Agent(s) (parallel)"]
     BUILDER --> REVIEWER["Reviewer Agent"]
     REVIEWER -->|pass| SHIP["Ship"]
     REVIEWER -->|refine| BUILDER
@@ -183,12 +191,13 @@ Pulse: Here is a function that sorts a list:
 | Command | Description |
 |---|---|
 | `pulse init` | Zero-config setup wizard |
-| `pulse doctor` | Self-check (Python / FTS5 / storage / Ollama reachable) |
+| `pulse doctor` | Self-check (Python / FTS5 / storage / Ollama reachable / MCP) |
 | `pulse chat <task>` | One-shot task through the orchestrator |
 | `pulse tui` | Interactive terminal chat (with slash commands) |
 | `pulse serve` | Start all gateways + scheduler |
 | `pulse fork <task>` | Decompose task → parallel sub-agents → merge |
 | `pulse team <task>` | Multi-agent team (Builder → Reviewer → Ship) |
+| `pulse health --port <port>` | HTTP health check server for Docker/monitoring |
 | `pulse skills list\|install\|eval\|promote\|rollback` | Skill lifecycle management |
 | `pulse memory recall\|add\|profile` | Cross-session FTS5 memory + dialectic profiling |
 | `pulse cron list\|add\|remove\|pause\|resume` | Cron job management |
@@ -206,6 +215,9 @@ pulse init --provider ollama --model qwen2.5:7b --yes
 
 # OpenAI
 pulse init --provider openai --model gpt-4o-mini --api-key sk-xxx --yes
+
+# Anthropic (Claude)
+pulse init --provider anthropic --model claude-3-5-sonnet-20241022 --api-key sk-ant-xxx --yes
 
 # OpenRouter (200+ models)
 pulse init --provider openrouter --model openai/gpt-4o-mini --api-key sk-xxx --yes
@@ -240,6 +252,24 @@ pulse init --provider ollama --model qwen2.5:7b \
 
 You can also set `base_url` directly in `~/.pulse/config.yaml` under `model:`.
 
+### Provider Fallback Chain
+
+Configure fallback providers in `config.yaml` so Pulse automatically retries
+on the next provider when the primary fails (or returns a useless response):
+
+```yaml
+model:
+  provider: openai
+  model: gpt-4o-mini
+  fallback:
+    - "anthropic:claude-3-5-sonnet-20241022"
+    - "openrouter:openai/gpt-4o-mini"
+```
+
+A built-in token-bucket rate limiter prevents burst traffic that triggers
+429 rate-limit errors — Ollama gets 10 req/s, OpenRouter 2 req/s, cloud
+providers 1 req/s by default.
+
 ---
 
 ## Installing Skills from the Ecosystem
@@ -259,6 +289,8 @@ pulse skills install https://github.com/user/some-skill.git
 ## Skill Evaluation Loop (the key differentiator)
 
 Every self-evolved skill MUST pass a golden-task replay before promotion.
+**Simple one-tool tasks no longer trigger evolution** — only complex
+multi-step runs (≥3 trajectory steps, ≥2 distinct tools) produce candidates.
 Promotions and rollbacks are explicit, reversible, and versioned.
 
 ```bash
@@ -318,6 +350,7 @@ Configured servers are stored in `~/.pulse/config.yaml` (never the `.env` secret
 
 - **Lazy, parallel discovery** — on startup Pulse probes every enabled server *in parallel* to fetch its tool list, then disconnects. Servers are only (re)spawned on demand, the first time one of their tools is actually invoked, so startup stays fast even with many servers.
 - **Automatic reconnection** — if a server process crashes mid-session, the next tool call transparently reconnects.
+- **Reader thread cleanup** — MCP client `stop()` joins stdout reader threads to prevent resource leaks.
 - **Argument validation** — tool calls are checked against each server's `inputSchema` (required fields + JSON types) before being sent, so mistakes surface as clean errors instead of server-side failures.
 - **`pulse mcp list`** shows a live health check per server: tool count and `ok` / `unreachable` status.
 
@@ -329,17 +362,34 @@ pulse mcp list     # live tool count + health per server
 
 ---
 
+## Health Check Endpoint
+
+For Docker or container orchestration, Pulse includes a lightweight HTTP health server:
+
+```bash
+# Start health check on port 8080
+pulse health --port 8080
+
+# GET / returns:
+# {"status":"ok","provider":"ollama","model":"qwen2.5:7b","skills":3,"ts":1690000000.0}
+```
+
+Returns 503 on failure (storage inaccessible, router broken, etc.).
+
+---
+
 ## Running Tests
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest -q   # 138 tests, all pass
+python -m pytest -q   # 138 tests, all pass (Python 3.11+)
 ```
 
 Tests cover: agentskills.io skill loading | evaluation loop (promote/deprecate/rollback) |
-error classification + retry | context budget overflow | orchestrator fault tolerance |
-sub-agent pool + error isolation | plugin discovery + activation (sandbox) |
-dialectic profiling | RL trajectory export | team orchestration.
+error classification + retry (including programming-error re-raise) |
+context budget overflow + progressive compaction | orchestrator fault tolerance |
+sub-agent pool + parallel execution + error isolation | plugin discovery + activation (sandbox) |
+dialectic profiling with input budget | RL trajectory export | team orchestration.
 
 ---
 
@@ -369,6 +419,7 @@ python scripts/benchmark.py --quick
 - [x] **P0** — Version consistency, CI/CD, real badges, CHANGELOG
 - [x] **P1** — Test coverage boost, exception narrowing, docstrings, CONTRIBUTING/Docker/Makefile
 - [x] **P2** — Plugin sandbox, .env chmod 600, benchmark scripts, Mermaid diagrams + TUI screenshots
+- [x] **v0.4.0** — Anthropic provider, rate limiter, bad-response fallback, thread-safe storage, per-user Telegram sessions, progressive context compaction, health endpoint, cron Event-based scheduling, skill evolution filtering, token estimation accuracy, MCP reader-thread cleanup
 
 ---
 
