@@ -68,6 +68,8 @@ class RetryPolicy:
 
 
 def _jitter(jitter: float) -> float:
+    if jitter <= 0:
+        return 0.0
     return secrets.randbelow(int(jitter * 1000)) / 1000.0
 
 
