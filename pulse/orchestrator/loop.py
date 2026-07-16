@@ -166,8 +166,14 @@ class Orchestrator:
         for step in range(self.config.max_iterations):
             if budget.over_soft:
                 messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
-            resp = self._chat_safely(messages, tool_schemas)
-            if resp is None:
+            try:
+                resp = guarded(self.router.chat, messages, tools=tool_schemas or None, allow=(ErrorClass.TRANSIENT,))
+            except CtxOverflowError:
+                messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
+                continue
+            except Exception as e:
+                self.obs.error(classify(e), str(e))
+                result.error = f"[{classify(e)}] {e}"
                 return result
 
             budget.reserve(resp.usage.total or _est(resp.content))
@@ -194,18 +200,6 @@ class Orchestrator:
         if history is not None:
             return history + [LLMMessage(role="user", content=task)]
         return [LLMMessage(role="system", content=system_content), LLMMessage(role="user", content=task)]
-
-    def _chat_safely(self, messages: list[LLMMessage], tool_schemas: list[dict]) -> LLMResponse | None:
-        try:
-            return guarded(self.router.chat, messages, tools=tool_schemas or None, allow=(ErrorClass.TRANSIENT,))
-        except CtxOverflowError:
-            return self._handle_ctx_overflow()
-        except Exception as e:
-            self.obs.error(classify(e), str(e))
-            return None
-
-    def _handle_ctx_overflow(self) -> None:
-        self._compact_messages([], keep_tokens=self.settings.max_session_tokens // 4)
 
     def _handle_tool_calls(
         self,

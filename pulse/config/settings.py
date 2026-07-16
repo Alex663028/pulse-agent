@@ -156,6 +156,8 @@ def load_env(s: Settings) -> dict[str, str]:
                 f"Consider running: chmod 600 {s.env_path}"
             )
     except OSError:
+        logging.getLogger(__name__).exception("oserror suppressed")
+        pass
         pass
     for line in s.env_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()

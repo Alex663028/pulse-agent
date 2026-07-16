@@ -90,7 +90,7 @@ class FeishuGateway(Gateway):
                     try:
                         self._send(chat_id, "Pulse 正在思考…", msg_type="interactive")
                     except Exception:
-                        pass
+                        logger.exception("feishu typing indicator failed")
                     # Route through orchestrator
                     res = self._runtime.orchestrator.run(
                         text, session_id=f"feishu:{chat_id}:{sender.get('sender_id', {}).get('open_id', 'default')}"

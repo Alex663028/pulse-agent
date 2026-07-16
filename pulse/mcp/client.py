@@ -220,6 +220,8 @@ class MCPClient:
             except subprocess.TimeoutExpired:
                 self._proc.kill()
         except Exception:
+            logger.exception("exception suppressed")
+            pass
             pass
         finally:
             self._proc = None
@@ -491,6 +493,8 @@ class MCPManager:
             try:
                 old.stop()
             except Exception:
+                logger.exception("exception suppressed")
+                pass
                 pass
         cfg = self._configs[server_name]
         client = MCPClient(command=cfg.command, args=list(cfg.args or []))
@@ -517,5 +521,7 @@ class MCPManager:
             try:
                 client.stop()
             except Exception:
+                logger.exception("exception suppressed")
+                pass
                 pass
         self._clients.clear()

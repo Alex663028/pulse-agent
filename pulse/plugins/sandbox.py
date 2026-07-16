@@ -309,6 +309,8 @@ class SandboxImportHook:
         try:
             sys.meta_path.remove(self)  # type: ignore[arg-type]
         except ValueError:
+            logger.exception("valueerror suppressed")
+            pass
             pass
         # Restore stashed modules.
         for mod_name, mod in self._stashed.items():
