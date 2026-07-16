@@ -13,7 +13,7 @@ Retries are bounded and deterministic-friendly (the sleep is injectable).
 """
 from __future__ import annotations
 
-import random
+import secrets
 import time
 from dataclasses import dataclass
 from typing import Callable, TypeVar
@@ -67,6 +67,10 @@ class RetryPolicy:
     sleep: Callable[[float], None] = lambda s: time.sleep(s)
 
 
+def _jitter(jitter: float) -> float:
+    return secrets.randbelow(int(jitter * 1000)) / 1000.0
+
+
 def guarded(fn: Callable[..., T], *args, policy: RetryPolicy | None = None, allow: tuple[str, ...] = (ErrorClass.TRANSIENT,), on_tool_fail: Callable[[], None] | None = None, **kwargs) -> T:
     """Run ``fn`` with bounded retry. Only error classes in ``allow`` are
     retried; everything else fails fast (fail-safe).
@@ -91,7 +95,7 @@ def guarded(fn: Callable[..., T], *args, policy: RetryPolicy | None = None, allo
             if cls == ErrorClass.TOOL_FAIL and on_tool_fail:
                 on_tool_fail()
             if cls in allow and attempt < policy.max_attempts:
-                delay = policy.base_delay * (2 ** (attempt - 1)) + random.uniform(0, policy.jitter)
+                delay = policy.base_delay * (2 ** (attempt - 1)) + _jitter(policy.jitter)
                 policy.sleep(delay)
                 continue
             raise RecoveryError(f"[{cls}] {e}") from e

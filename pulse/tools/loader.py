@@ -22,6 +22,7 @@ Python script format:
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -31,6 +32,8 @@ from typing import Any
 import yaml
 
 from pulse.tools.base import Tool, ToolResult
+
+logger = logging.getLogger(__name__)
 
 CUSTOM_TOOLS_DIR = Path.home() / ".pulse" / "tools"
 
@@ -128,11 +131,10 @@ class ScriptTool(Tool):
     def _build_wrapper(self) -> str:
         """Build a Python script that imports the target module and calls run()."""
         script = Path(self._script_path).read_text(encoding="utf-8")
-        # Inject: read JSON args from env, call run(), print result
+        # Inject: read JSON args from env, call run(), return result
         wrapper = f"""
 import json
 import sys
-from pathlib import Path
 
 {script}
 
@@ -143,7 +145,7 @@ if __name__ == "__main__":
         print(result)
     except Exception as e:
         print(f"ERROR: {{e}}", file=sys.stderr)
-        sys.exit(1)
+        raise SystemExit(1)
 """
         return wrapper
 
@@ -160,21 +162,21 @@ def load_custom_tools() -> list[Tool]:
                 try:
                     tools.append(spec.to_tool())
                 except Exception as e:
-                    print(f"[tools] failed to load {entry.name}: {e}")
+                    logger.warning("[tools] failed to load %s: %s", entry.name, e)
         elif entry.suffix == ".json":
             spec = _load_json_spec(entry)
             if spec:
                 try:
                     tools.append(spec.to_tool())
                 except Exception as e:
-                    print(f"[tools] failed to load {entry.name}: {e}")
+                    logger.warning("[tools] failed to load %s: %s", entry.name, e)
         elif entry.suffix == ".py":
             spec = _load_py_spec(entry)
             if spec:
                 try:
                     tools.append(spec.to_tool())
                 except Exception as e:
-                    print(f"[tools] failed to load {entry.name}: {e}")
+                    logger.warning("[tools] failed to load %s: %s", entry.name, e)
     return tools
 
 

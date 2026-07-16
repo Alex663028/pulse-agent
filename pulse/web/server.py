@@ -1,18 +1,21 @@
 """Web UI — Flask-based session management dashboard on port 10000."""
 from __future__ import annotations
 
-import sys
 import threading
 from datetime import datetime
 from typing import Any
+
+
+class DependencyError(RuntimeError):
+    """Raised when an optional dependency is missing."""
+
 
 DEFAULT_PORT = 10000
 
 try:
     from flask import Flask, render_template_string, request, jsonify, redirect, url_for
-except ImportError:
-    print("Flask not installed. Install with: pip install flask")
-    sys.exit(1)
+except ImportError as exc:
+    raise DependencyError("Flask not installed. Install with: pip install flask") from exc
 
 from pulse.cli.runtime import bootstrap  # noqa: E402
 

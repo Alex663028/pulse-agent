@@ -205,7 +205,12 @@ class PythonExecTool(Tool):
 
 
 class ShellExecTool(Tool):
-    """Execute a shell command and return stdout."""
+    """Execute a shell command and return stdout.
+
+    Warning: this tool runs commands with ``shell=True``. User-supplied input
+    is interpolated into a shell string, so untrusted input can execute
+    arbitrary commands. Validate or sanitize inputs before passing them here.
+    """
 
     name = "shell_exec"
     description = "Execute a shell command and return stdout. Args: command (str), timeout (int, optional, default 10)."
@@ -221,6 +226,8 @@ class ShellExecTool(Tool):
 
     def run(self, command: str = "", timeout: int = 10, **kwargs: Any) -> ToolResult:
         """Execute a shell command and return stdout (best-effort)."""
+        if not command or not command.strip():
+            return ToolResult(ok=False, error="empty command")
         try:
             timeout = max(1, min(int(timeout), 60))
             result = subprocess.run(

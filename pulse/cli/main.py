@@ -55,7 +55,8 @@ def _cron_path(rt) -> str:
 def _load_cron(rt) -> dict[str, dict]:
     p = _cron_path(rt)
     if os.path.exists(p):
-        return json.loads(open(p).read())
+        with open(p, "r", encoding="utf-8") as fh:
+            return json.load(fh)
     return {}
 
 
