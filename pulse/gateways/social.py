@@ -26,6 +26,32 @@ from pulse.gateways.base import Gateway
 
 logger = logging.getLogger("pulse.gateway.feishu")
 
+WEBHOOK_MAX_TEXT_LEN = 4096
+_WEBHOOK_AUDIT_LOGGER = logging.getLogger("pulse.gateway.webhook_audit")
+
+
+def _safe_webhook_text(text: str, limit: int = WEBHOOK_MAX_TEXT_LEN) -> str:
+    """Sanitize inbound webhook text: strip control chars, enforce length."""
+    if not isinstance(text, str):
+        return ""
+    sanitized = "".join(ch for ch in text if ch.isprintable() or ch in "\n\t")
+    sanitized = sanitized.strip()
+    return sanitized[: max(limit, 1)]
+
+
+def _audit_webhook(gateway: str, source: str, status: str, text: str = "") -> None:
+    """Audit webhook delivery attempts. Never include PII beyond source id."""
+    try:
+        _WEBHOOK_AUDIT_LOGGER.info(
+            "webhook %s from=%s status=%s len=%d",
+            gateway,
+            source,
+            status,
+            len(text or ""),
+        )
+    except Exception:
+        pass
+
 
 class FeishuGateway(Gateway):
     """Receive messages from Feishu and route them through the orchestrator.
@@ -82,9 +108,14 @@ class FeishuGateway(Gateway):
 
             # Only process text messages
             if msg_type == "text":
-                import json
-                content = json.loads(msg.get("content", "{}"))
-                text = content.get("text", "").strip()
+                content_raw = msg.get("content", "{}") or "{}"
+                try:
+                    content = json.loads(content_raw)
+                except json.JSONDecodeError:
+                    content = {}
+                text = _safe_webhook_text(content.get("text", ""))
+                source_id = sender.get("sender_id", {}).get("open_id", "default")
+                _audit_webhook("feishu", source_id, "received", text)
                 if text:
                     # Send typing indicator
                     try:
@@ -93,9 +124,11 @@ class FeishuGateway(Gateway):
                         logger.exception("feishu typing indicator failed")
                     # Route through orchestrator
                     res = self._runtime.orchestrator.run(
-                        text, session_id=f"feishu:{chat_id}:{sender.get('sender_id', {}).get('open_id', 'default')}"
+                        text,
+                        session_id=f"feishu:{chat_id}:{source_id}",
                     )
                     answer = res.answer if res.success else f"Error: {res.error}"
+                    _audit_webhook("feishu", source_id, "success" if res.success else "error", answer)
                     self._send(chat_id, answer)
 
         return {"code": 0, "msg": "ok"}

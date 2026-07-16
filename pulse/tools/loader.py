@@ -134,6 +134,7 @@ class ScriptTool(Tool):
         # Inject: read JSON args from env, call run(), return result
         wrapper = f"""
 import json
+import logging
 import sys
 
 {script}
@@ -142,9 +143,9 @@ if __name__ == "__main__":
     args = json.loads('''{json.dumps(dict())}''')
     try:
         result = run(**args)
-        print(result)
+        logging.getLogger("pulse.tools.wrapper").info("%s", result)
     except Exception as e:
-        print(f"ERROR: {{e}}", file=sys.stderr)
+        logging.getLogger("pulse.tools.wrapper").error("ERROR: %s", e, exc_info=True)
         raise SystemExit(1)
 """
         return wrapper

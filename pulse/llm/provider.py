@@ -294,34 +294,43 @@ class AnthropicProvider(LLMProvider):
         if self._client is None:
             raise LLMError("Anthropic client not initialized")
 
-        # Build Anthropic system message from the system message if present
+        system = self._extract_system(messages)
+        anthropic_tools = self._convert_tools(tools)
+        conversation = self._convert_messages(messages)
+        return self._invoke(system, conversation, anthropic_tools, tool_choice, **kwargs)
+
+    def _extract_system(self, messages: list[LLMMessage]) -> str:
         system = ""
-        filtered_messages: list[LLMMessage] = []
+        filtered: list[LLMMessage] = []
         for m in messages:
             if m.role == "system":
-                system = m.content
+                system = m.content or ""
             else:
-                filtered_messages.append(m)
+                filtered.append(m)
+        return system, filtered
 
-        # Convert tool definitions to Anthropic tool format
-        anthropic_tools = []
-        if tools:
-            for tool_def in tools:
-                fn = tool_def.get("function", tool_def)
-                param_schema = fn.get("parameters", {"type": "object", "properties": {}})
-                anthropic_tools.append({
-                    "name": fn.get("name", ""),
-                    "description": fn.get("description", ""),
-                    "input_schema": param_schema,
-                })
+    @staticmethod
+    def _convert_tools(tools: Optional[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+        if not tools:
+            return []
+        out: list[dict[str, Any]] = []
+        for tool_def in tools:
+            fn = tool_def.get("function", tool_def)
+            param_schema = fn.get("parameters", {"type": "object", "properties": {}})
+            out.append({
+                "name": fn.get("name", ""),
+                "description": fn.get("description", ""),
+                "input_schema": param_schema,
+            })
+        return out
 
-        # Build conversation messages
-        conversation = []
-        for m in filtered_messages:
+    @staticmethod
+    def _convert_messages(messages: list[LLMMessage]) -> list[dict[str, Any]]:
+        conversation: list[dict[str, Any]] = []
+        for m in messages:
             if m.role == "user":
                 conversation.append({"role": "user", "content": m.content or ""})
             elif m.role == "assistant":
-                block = {"type": "text", "text": m.content or ""}
                 if m.tool_calls:
                     for tc in m.tool_calls:
                         conversation.append({
@@ -337,7 +346,7 @@ class AnthropicProvider(LLMProvider):
                             ],
                         })
                 else:
-                    conversation.append({"role": "assistant", "content": [block]})
+                    conversation.append({"role": "assistant", "content": [{"type": "text", "text": m.content or ""}]})
             elif m.role == "tool":
                 conversation.append({
                     "role": "user",
@@ -349,12 +358,20 @@ class AnthropicProvider(LLMProvider):
                         }
                     ],
                 })
+        return conversation
 
-        # Invoke the Anthropic API
+    def _invoke(
+        self,
+        system: str,
+        conversation: list[dict[str, Any]],
+        anthropic_tools: list[dict[str, Any]],
+        tool_choice: Optional[str],
+        **kwargs: Any,
+    ) -> LLMResponse:
         try:
             kwargs.setdefault("max_tokens", self.max_tokens)
             kwargs.setdefault("model", self.model)
-            if tools:
+            if anthropic_tools:
                 kwargs["tools"] = anthropic_tools
             if tool_choice:
                 kwargs["tool_choice"] = (
@@ -364,33 +381,37 @@ class AnthropicProvider(LLMProvider):
                 )
 
             resp = self._client.messages.create(
-                system=system,
+                system=system or None,
                 messages=conversation,
                 **kwargs,
             )
 
-            # Convert Anthropic response to normalized LLMResponse
-            tool_calls = []
-            content_text = ""
-            for block in resp.content:
-                if block.type == "text":
-                    content_text += block.text
-                elif block.type == "tool_use":
-                    tool_calls.append(ToolCall(
-                        id=block.id,
-                        name=block.name,
-                        arguments=block.input or {},
-                    ))
-
-            return LLMResponse(
-                content=content_text,
-                tool_calls=tool_calls,
-                model=self.model,
-                finish_reason=resp.stop_reason or "stop",
-            )
+            return self._parse_response(resp)
 
         except Exception as e:
             raise AnthropicError(f"Anthropic API error: {e}") from e
+
+    @staticmethod
+    def _parse_response(resp: Any) -> LLMResponse:
+        tool_calls: list[ToolCall] = []
+        content_text = ""
+        for block in resp.content:
+            if block.type == "text":
+                content_text += block.text
+            elif block.type == "tool_use":
+                tool_calls.append(
+                    ToolCall(
+                        id=block.id,
+                        name=block.name,
+                        arguments=block.input or {},
+                    )
+                )
+        return LLMResponse(
+            content=content_text,
+            tool_calls=tool_calls,
+            model=resp.model,
+            finish_reason=resp.stop_reason or "stop",
+        )
 
 
 class MockProvider(LLMProvider):
