@@ -40,15 +40,45 @@ class Observability:
         self.events: list[Event] = []
         self._log = logger or logging.getLogger("pulse")
         self._max_events = max_events
+        self._ext = None
 
     def emit(self, kind: str, **data: Any) -> None:
-        """Append an event of ``kind`` with arbitrary structured ``data`` and log it at DEBUG."""
+        """Append an event of ``kind`` and log it at DEBUG."""
         ev = Event(ts=time.time(), trace_id=self.trace_id, kind=kind, data=data)
         self.events.append(ev)
-        # Cap at max_events to prevent memory leak in long-running services
         if len(self.events) > self._max_events:
             self.events = self.events[-self._max_events:]
         self._log.debug(ev.to_json())
+        # Optional trace export for LangSmith/LangFuse
+        try:
+            ext = getattr(self, "_ext", None)
+            if ext is not None:
+                ts = getattr(ext, "trace_store", None)
+                if ts is not None:
+                    from pulse.observability.tracing import Trace
+                    ts.record(Trace(
+                        trace_id=self.trace_id,
+                        span_id=uuid.uuid4().hex[:12],
+                        name=kind,
+                        kind=kind,
+                        data=data,
+                    ))
+                for tracer in (getattr(ext, "langsmith", None), getattr(ext, "langfuse", None)):
+                    if tracer is not None:
+                        try:
+                            tracer.export([
+                                Trace(
+                                    trace_id=self.trace_id,
+                                    span_id=uuid.uuid4().hex[:12],
+                                    name=kind,
+                                    kind=kind,
+                                    data=data,
+                                )
+                            ])
+                        except Exception:
+                            pass
+        except Exception:
+            pass
 
     def token_usage(self, prompt: int, completion: int, total: int) -> None:
         """Emit a ``token_usage`` event with prompt/completion/total counts."""

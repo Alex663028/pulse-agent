@@ -62,6 +62,13 @@ def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
         manager = MCPManager(tools)
         manager.load_servers(settings.mcp_servers)
         rt.mcp = manager
+    try:
+        from pulse.cli.runtime_ext import apply_extensions
+        apply_extensions(rt)
+        orch._ext = getattr(rt, "ext", None)
+        obs._ext = getattr(rt, "ext", None)
+    except Exception as e:
+        logger.warning("runtime extensions init failed: %s", e)
     return rt
 
 

@@ -87,6 +87,8 @@ class Orchestrator:
         self._session_lock = Lock()
         self._corrections: list[str] = []
         self._corrections_lock = Lock()
+        self._last_task = ""
+        self._ext = None
 
     def _build_system(self, skills: list) -> str:
         parts = [SYSTEM_PROMPT]
@@ -101,6 +103,15 @@ class Orchestrator:
             recent = self._corrections[-5:]
         if recent:
             parts.append("## Recent lessons:\n" + "\n".join(f"- {c}" for c in recent))
+        # Inject RAG context if enabled
+        ext = getattr(self, "_ext", None)
+        if ext is not None and getattr(ext, "rag", None) is not None:
+            try:
+                ctx = ext.rag.build_context(self._last_task or "", limit=3)
+                if ctx:
+                    parts.append(f"## Retrieved context\n{ctx}")
+            except Exception:
+                pass
         return "\n\n".join(parts)
 
     def add_correction(self, correction: str) -> None:
@@ -150,6 +161,7 @@ class Orchestrator:
         yield from self._run_internal_streaming(task, sid)
 
     def _run_internal(self, task: str, sid: str, use_streaming: bool = False) -> TaskResult:
+        self._last_task = task
         self.obs.emit("session_start", session=sid, task=task[:200])
         self.storage.index_memory(sid, task)
         skills = self._select_skills(task)
