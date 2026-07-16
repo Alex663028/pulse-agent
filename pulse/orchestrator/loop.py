@@ -1,8 +1,10 @@
 """Core orchestration loop."""
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
+from threading import Lock
 from typing import Any, Iterator, Optional
 from uuid import uuid4
 
@@ -18,6 +20,9 @@ from pulse.skills.registry import SkillRegistry
 from pulse.skills.trigger import select as select_skills
 from pulse.storage.engine import Storage
 from pulse.tools.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
+
 
 
 def _est(text: str) -> int:
@@ -79,6 +84,7 @@ class Orchestrator:
         self.obs = obs or Observability()
         self.config = config or OrchestratorConfig()
         self._session_histories: dict[str, list[LLMMessage]] = {}
+        self._session_lock = Lock()
         # User feedback: corrections → injected into memory
         self._corrections: list[str] = []
 
@@ -152,8 +158,9 @@ class Orchestrator:
             self.obs.skill_activated(s.name)
 
         system_content = self._build_system(skills)
-        history = self._session_histories.get(sid)
-        if history and sid in self._session_histories:
+        with self._session_lock:
+            history = self._session_histories.get(sid)
+        if history is not None:
             messages: list[LLMMessage] = history + [LLMMessage(role="user", content=task)]
         else:
             messages = [LLMMessage(role="system", content=system_content), LLMMessage(role="user", content=task)]
@@ -193,7 +200,8 @@ class Orchestrator:
             result.used_skills = [s.name for s in skills]
             result.token_usage = budget.used
             messages.append(LLMMessage(role="assistant", content=resp.content))
-            self._session_histories[sid] = messages
+            with self._session_lock:
+                self._session_histories[sid] = messages
             self.storage.store_session(sid, summary=resp.content[:200], token_usage=budget.used)
             self.storage.log_trajectory(
                 tid=f"traj:{uuid4().hex[:10]}", session_id=sid, outcome=True,

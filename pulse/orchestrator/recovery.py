@@ -99,5 +99,6 @@ def guarded(fn: Callable[..., T], *args, policy: RetryPolicy | None = None, allo
                 policy.sleep(delay)
                 continue
             raise RecoveryError(f"[{cls}] {e}") from e
-    assert last is not None
+    if last is None:
+        raise RecoveryError("exhausted retries with no recorded failure")
     raise RecoveryError(f"exhausted retries: {last}")

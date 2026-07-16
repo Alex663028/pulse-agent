@@ -226,7 +226,8 @@ class MCPClient:
 
     def _read_loop(self) -> None:
         """Continuously read JSON-RPC responses from stdout into ``_responses``."""
-        assert self._proc is not None and self._proc.stdout is not None
+        if self._proc is None or self._proc.stdout is None:
+            raise MCPError("MCP server process is not running")
         for line in self._proc.stdout:
             line = line.strip()
             if not line:
@@ -242,7 +243,8 @@ class MCPClient:
 
     def _stderr_loop(self) -> None:
         """Read stderr from the server and store in ring buffer for debugging."""
-        assert self._proc is not None and self._proc.stderr is not None
+        if self._proc is None or self._proc.stderr is None:
+            raise MCPError("MCP server process is not running")
         for line in self._proc.stderr:
             self._stderr_buffer.append(line.strip())
 
@@ -266,14 +268,16 @@ class MCPClient:
             if params is not None:
                 req["params"] = params
             try:
-                assert self._proc is not None and self._proc.stdin is not None
+                if self._proc is None or self._proc.stdin is None:
+                    raise MCPError("MCP server process is not running")
                 self._proc.stdin.write(json.dumps(req) + "\n")
                 self._proc.stdin.flush()
             except (BrokenPipeError, OSError):
                 # Server died mid-request — try to relaunch
                 try:
                     self._relaunch()
-                    assert self._proc is not None and self._proc.stdin is not None
+                    if self._proc is None or self._proc.stdin is None:
+                        raise MCPError("MCP server process is not running")
                     self._proc.stdin.write(json.dumps(req) + "\n")
                     self._proc.stdin.flush()
                 except Exception as e:
