@@ -85,8 +85,8 @@ class Orchestrator:
         self.config = config or OrchestratorConfig()
         self._session_histories: dict[str, list[LLMMessage]] = {}
         self._session_lock = Lock()
-        # User feedback: corrections → injected into memory
         self._corrections: list[str] = []
+        self._corrections_lock = Lock()
 
     def _build_system(self, skills: list) -> str:
         parts = [SYSTEM_PROMPT]
@@ -97,14 +97,16 @@ class Orchestrator:
             sk_lines = [f"- **{s.name}**: {s.description[:200]}" for s in skills]
             parts.append(f"## Available skills\n{chr(10).join(sk_lines)}")
         # Inject recent corrections as lessons
-        if self._corrections:
+        with self._corrections_lock:
             recent = self._corrections[-5:]
+        if recent:
             parts.append("## Recent lessons:\n" + "\n".join(f"- {c}" for c in recent))
         return "\n\n".join(parts)
 
     def add_correction(self, correction: str) -> None:
         """Record a user correction ('No, I meant X', 'That's wrong because Y')."""
-        self._corrections.append(correction.strip())
+        with self._corrections_lock:
+            self._corrections.append(correction.strip())
 
     def _confirm_if_dangerous(self, name: str, args: dict) -> Optional[str]:
         if name in DANGEROUS_TOOLS:
