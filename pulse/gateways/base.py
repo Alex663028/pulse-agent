@@ -10,11 +10,14 @@ runs cron-triggered tasks without waiting for user input.
 """
 from __future__ import annotations
 
+import logging
 import threading
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from pulse.cli.runtime import Runtime
+
+logger = logging.getLogger(__name__)
 
 
 class Gateway(ABC):
@@ -61,7 +64,7 @@ class GatewayManager:
             try:
                 gw.stop()
             except Exception:
-                pass
+                logger.exception("gateway %s stop failed", gw.name)
         for t in self._threads:
             t.join(timeout=5)
         self._threads.clear()

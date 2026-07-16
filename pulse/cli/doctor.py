@@ -1,12 +1,15 @@
 """`pulse doctor` — self-check for fast troubleshooting."""
 from __future__ import annotations
 
+import logging
 import sys
 import urllib.request
 from typing import NamedTuple
 
 from pulse.config.settings import Settings
 from pulse.storage.engine import Storage
+
+logger = logging.getLogger(__name__)
 
 Check = NamedTuple("Check", [("name", str), ("ok", bool), ("detail", str)])
 
@@ -28,6 +31,7 @@ def run_doctor(settings: Settings) -> list[Check]:
         checks.append(Check("storage writable", True, str(settings.db_path)))
     except Exception as e:  # noqa: BLE001
         checks.append(Check("storage writable", False, str(e)))
+        logger.exception("storage writable check failed")
 
     # dirs
     for label, d in (("skills_dir", settings.skills_dir), ("memory_dir", settings.memory_dir)):
@@ -40,6 +44,7 @@ def run_doctor(settings: Settings) -> list[Check]:
             checks.append(Check("ollama reachable", True, settings.model.base_url))
         except Exception:
             checks.append(Check("ollama reachable", False, "not running — `ollama serve`"))
+            logger.exception("ollama reachability check failed")
     else:
         checks.append(Check(f"provider={settings.model.provider}", True, "cloud (API key in .env)"))
 

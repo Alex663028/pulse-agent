@@ -6,12 +6,15 @@ Uses only the stdlib + ``requests`` (no heavy framework).
 from __future__ import annotations
 
 import json
+import logging
 import time
 import urllib.request
 import urllib.error
 
 from pulse.cli.runtime import Runtime
 from pulse.gateways.base import Gateway
+
+logger = logging.getLogger(__name__)
 
 API = "https://api.telegram.org/bot{token}/{method}"
 
@@ -53,10 +56,10 @@ class TelegramGateway(Gateway):
             env = load_env(runtime.settings)
             self._token = env.get("TELEGRAM_BOT_TOKEN", "")
         if not self._token:
-            print("[telegram] no TELEGRAM_BOT_TOKEN — gateway disabled")
+            logger.warning("[telegram] no TELEGRAM_BOT_TOKEN — gateway disabled")
             return
         me = self._call("getMe")
-        print(f"[telegram] connected as @{me.get('result', {}).get('username', '?')}")
+        logger.info("[telegram] connected as @%s", me.get('result', {}).get('username', '?'))
 
         self._active = True
         while self._active:

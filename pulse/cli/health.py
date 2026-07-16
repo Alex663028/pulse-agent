@@ -6,10 +6,13 @@ when Pulse is running (storage accessible, router reachable).
 from __future__ import annotations
 
 import json
+import logging
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from pulse.cli.runtime import Runtime, bootstrap
+
+logger = logging.getLogger(__name__)
 
 
 _runtime_cache: Runtime | None = None
@@ -57,7 +60,7 @@ class HealthHandler(BaseHTTPRequestHandler):
 def run(port: int = 8080):
     """Start the health check server on ``port``."""
     server = HTTPServer(("0.0.0.0", port), HealthHandler)
-    print(f"pulse health server on :{port}")
+    logger.info("pulse health server on :%s", port)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

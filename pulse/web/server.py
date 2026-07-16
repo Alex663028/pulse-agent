@@ -1,9 +1,13 @@
 """Web UI — Flask-based session management dashboard on port 10000."""
 from __future__ import annotations
 
+import logging
 import threading
 from datetime import datetime
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 class DependencyError(RuntimeError):
@@ -389,7 +393,7 @@ def main():
     args = parser.parse_args()
 
     app = create_app()
-    print(f"Pulse Web UI running on http://{args.host}:{args.port}")
+    logger.info("Pulse Web UI running on http://%s:%s", args.host, args.port)
     app.run(host=args.host, port=args.port, debug=args.debug)
 
 
