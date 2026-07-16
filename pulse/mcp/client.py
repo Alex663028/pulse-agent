@@ -152,7 +152,8 @@ class MCPClient:
             raise MCPError(f"failed to launch MCP server '{self.command}': {e}") from e
 
         self._stop.clear()
-        assert self._proc.stdout is not None
+        if self._proc.stdout is None:
+            raise MCPError("MCP server did not provide stdout")
         self._read_thread = threading.Thread(target=self._read_loop, daemon=True, name="mcp-read")
         self._read_thread.start()
         # stderr thread: capture server logs for debugging
@@ -162,7 +163,8 @@ class MCPClient:
 
     def _do_initialize(self) -> None:
         """Run the initialize handshake."""
-        assert self._proc is not None
+        if self._proc is None:
+            raise MCPError("MCP server process is not running")
         resp = self._request(
             "initialize",
             {
