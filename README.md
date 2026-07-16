@@ -1,7 +1,7 @@
 # Pulse — Self-improving AI Agent (Reliability-First)
 
 [![CI](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-73%25-yellow)](https://github.com/Alex663028/pulse-agent)
+[![Coverage](https://img.shields.io/badge/coverage-61%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v0.5.2-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.5.2)

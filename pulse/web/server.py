@@ -299,96 +299,95 @@ class PulseWebUI:
 
     def _register_routes(self) -> None:
         app = self.app
-        rt = self.runtime
+        app.add_url_rule("/", "index", self._route_index)
+        app.add_url_rule("/chat/<session_id>", "chat", self._route_chat)
+        app.add_url_rule("/tools", "tools", self._route_tools)
+        app.add_url_rule("/settings", "settings", self._route_settings)
+        app.add_url_rule("/api/sessions", "api_create_session", self._route_api_create_session, methods=["POST"])
+        app.add_url_rule("/api/sessions/<session_id>/delete", "api_delete_session", self._route_api_delete_session, methods=["POST"])
+        app.add_url_rule("/api/chat", "api_chat", self._route_api_chat, methods=["POST"])
+        app.add_url_rule("/api/tools", "api_tools", self._route_api_tools, methods=["GET"])
 
-        @app.route("/")
-        def index():
-            return self._render(
-                "sessions",
-                template=SESSIONS_TEMPLATE,
-                sessions=self._get_all_sessions(),
-                stats=self._stats(rt, self.sessions),
-            )
+    def _route_index(self):
+        return self._render(
+            "sessions",
+            template=SESSIONS_TEMPLATE,
+            sessions=self._get_all_sessions(),
+            stats=self._stats(self.runtime, self.sessions),
+        )
 
-        @app.route("/chat/<session_id>")
-        def chat(session_id: str):
-            s = self._get_session(session_id)
-            if not s:
-                return redirect(url_for("index"))
-            return self._render(
-                "sessions",
-                template=CHAT_TEMPLATE,
-                session_id=session_id,
-                messages=s["messages"],
-            )
-
-        @app.route("/tools")
-        def tools():
-            schemas = rt.tools.schemas()
-            tool_list = [
-                {
-                    "name": t["function"]["name"],
-                    "description": t["function"]["description"][:80],
-                    "enabled": True,
-                }
-                for t in schemas
-            ]
-            return self._render("tools", template=TOOLS_TEMPLATE, tools=tool_list)
-
-        @app.route("/settings")
-        def settings_page():
-            return self._render(
-                "settings",
-                template=SETTINGS_TEMPLATE,
-                current={
-                    "provider": rt.settings.model.provider,
-                    "model": rt.settings.model.model,
-                    "base_url": rt.settings.model.base_url,
-                    "max_session_tokens": rt.settings.max_session_tokens,
-                },
-                providers=["ollama", "openai", "openrouter", "deepseek", "anthropic", "mock"],
-            )
-
-        @app.route("/api/sessions", methods=["POST"])
-        def api_create_session():
-            name = request.form.get("name") or request.json.get("name") or "Untitled"
-            sid = self._create_session(name)
-            return redirect(url_for("chat", session_id=sid))
-
-        @app.route("/api/sessions/<session_id>/delete", methods=["POST"])
-        def api_delete_session(session_id: str):
-            self._delete_session(session_id)
+    def _route_chat(self, session_id: str):
+        s = self._get_session(session_id)
+        if not s:
             return redirect(url_for("index"))
+        return self._render(
+            "sessions",
+            template=CHAT_TEMPLATE,
+            session_id=session_id,
+            messages=s["messages"],
+        )
 
-        @app.route("/api/chat", methods=["POST"])
-        def api_chat():
-            data = request.get_json()
-            if not data:
-                return jsonify({"error": "no JSON body"}), 400
-            sid = data.get("session_id") or self._create_session("New Chat")
-            message = data.get("message", "").strip()
-            if not message:
-                return jsonify({"error": "empty message"}), 400
+    def _route_tools(self):
+        schemas = self.runtime.tools.schemas()
+        tool_list = [
+            {
+                "name": t["function"]["name"],
+                "description": t["function"]["description"][:80],
+                "enabled": True,
+            }
+            for t in schemas
+        ]
+        return self._render("tools", template=TOOLS_TEMPLATE, tools=tool_list)
 
-            s = self._get_session(sid)
-            if not s:
-                return jsonify({"error": "session not found"}), 404
+    def _route_settings(self):
+        return self._render(
+            "settings",
+            template=SETTINGS_TEMPLATE,
+            current={
+                "provider": self.runtime.settings.model.provider,
+                "model": self.runtime.settings.model.model,
+                "base_url": self.runtime.settings.model.base_url,
+                "max_session_tokens": self.runtime.settings.max_session_tokens,
+            },
+            providers=["ollama", "openai", "openrouter", "deepseek", "anthropic", "mock"],
+        )
 
-            s["messages"].append({"role": "user", "content": message})
+    def _route_api_create_session(self):
+        name = request.form.get("name") or request.json.get("name") or "Untitled"
+        sid = self._create_session(name)
+        return redirect(url_for("chat", session_id=sid))
 
-            try:
-                result = rt.orchestrator.run(message, session_id=sid)
-                answer = result.answer if result.success else f"Error: {result.error}"
-            except Exception as e:
-                logger.exception("web chat failed")
-                answer = f"Error: {e}"
+    def _route_api_delete_session(self, session_id: str):
+        self._delete_session(session_id)
+        return redirect(url_for("index"))
 
-            s["messages"].append({"role": "assistant", "content": answer})
-            return jsonify({"answer": answer, "session_id": sid})
+    def _route_api_chat(self):
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "no JSON body"}), 400
+        sid = data.get("session_id") or self._create_session("New Chat")
+        message = data.get("message", "").strip()
+        if not message:
+            return jsonify({"error": "empty message"}), 400
 
-        @app.route("/api/tools", methods=["GET"])
-        def api_tools():
-            return jsonify({"tools": rt.tools.schemas()})
+        s = self._get_session(sid)
+        if not s:
+            return jsonify({"error": "session not found"}), 404
+
+        s["messages"].append({"role": "user", "content": message})
+
+        try:
+            result = self.runtime.orchestrator.run(message, session_id=sid)
+            answer = result.answer if result.success else f"Error: {result.error}"
+        except Exception as e:
+            logger.exception("web chat failed")
+            answer = f"Error: {e}"
+
+        s["messages"].append({"role": "assistant", "content": answer})
+        return jsonify({"answer": answer, "session_id": sid})
+
+    def _route_api_tools(self):
+        return jsonify({"tools": self.runtime.tools.schemas()})
 
 
 def create_app() -> Flask:
