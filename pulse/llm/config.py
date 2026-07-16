@@ -1,7 +1,6 @@
 """Build a provider/router from application settings."""
 from __future__ import annotations
 
-import logging
 
 
 from pulse.config.settings import DEFAULT_BASE_URL, Settings, load_env

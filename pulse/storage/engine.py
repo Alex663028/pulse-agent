@@ -6,7 +6,6 @@ skill versioning, and full-text memory search.
 """
 from __future__ import annotations
 
-import logging
 
 
 import json
