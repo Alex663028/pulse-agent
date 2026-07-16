@@ -53,7 +53,7 @@ class MCPServerConfig(BaseModel):
 
 
 class Settings(BaseModel):
-    """Top-level application settings: paths, model config, auto-evolution and session limits."""
+    """Top-level application settings: paths, model config, auto-evolution, RAG, observability."""
 
     config_dir: Path = Field(default_factory=default_config_dir)
     model: ModelSettings = Field(default_factory=ModelSettings)
@@ -63,6 +63,16 @@ class Settings(BaseModel):
     max_iterations: int = 20
     log_level: str = "INFO"
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
+    # RAG config
+    rag_enabled: bool = False
+    rag_chunk_size: int = 500
+    rag_overlap: int = 50
+    rag_vector_backend: str = "sqlite"
+    # Observability config
+    trace_enabled: bool = False
+    langsmith_api_key: str = ""
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
 
     @property
     def data_dir(self) -> Path:

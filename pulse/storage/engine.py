@@ -237,14 +237,13 @@ class Storage:
     def search_memory(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Full-text search over indexed memory; falls back to substring scan if FTS5 is unavailable."""
         if not self.has_fts5():
-            # graceful degradation: substring scan
             with self._lock:
                 rows = self._conn.execute("SELECT * FROM fts_memory ORDER BY ts DESC").fetchall()
             q = query.lower()
             return [dict(r) for r in rows if q in (r["content"] or "").lower()][:limit]
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM fts_memory_ix WHERE fts_memory_ix MATCH ? ORDER BY ts DESC LIMIT ?",
+                "SELECT *, rank FROM fts_memory_ix WHERE fts_memory_ix MATCH ? ORDER BY rank LIMIT ?",
                 (query, limit),
             ).fetchall()
         return [dict(r) for r in rows]
