@@ -150,6 +150,17 @@ class OpenAICompatProvider(LLMProvider):
         **kwargs: Any,
     ) -> LLMResponse:
         """Send messages to the OpenAI-compatible endpoint."""
+        payload = self._build_payload(messages, tools, tool_choice, **kwargs)
+        resp = self._execute_payload(payload)
+        return self._parse_response(resp)
+
+    def _build_payload(
+        self,
+        messages: list[LLMMessage],
+        tools: Optional[list[dict[str, Any]]],
+        tool_choice: Optional[str],
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": kwargs.pop("model", self.model),
             "messages": [m.to_openai() for m in messages],
@@ -159,13 +170,19 @@ class OpenAICompatProvider(LLMProvider):
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice or "auto"
+        return payload
+
+    def _execute_payload(self, payload: dict[str, Any]) -> Any:
         try:
             if self._client is None:
                 from openai import OpenAI
+
                 self._client = OpenAI(base_url=self.base_url, api_key=self.api_key, timeout=self.timeout)
-            resp = self._client.chat.completions.create(**payload)
+            return self._client.chat.completions.create(**payload)
         except Exception as e:
             raise LLMError(f"openai-compat request failed: {e}") from e
+
+    def _parse_response(self, resp: Any) -> LLMResponse:
         choice = resp.choices[0]
         msg = choice.message
         tool_calls = []

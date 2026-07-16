@@ -152,20 +152,12 @@ class Orchestrator:
     def _run_internal(self, task: str, sid: str, use_streaming: bool = False) -> TaskResult:
         self.obs.emit("session_start", session=sid, task=task[:200])
         self.storage.index_memory(sid, task)
-        try:
-            skills = select_skills(self.registry, task)
-        except Exception:
-            skills = []
+        skills = self._select_skills(task)
         for s in skills:
             self.obs.skill_activated(s.name)
 
         system_content = self._build_system(skills)
-        with self._session_lock:
-            history = self._session_histories.get(sid)
-        if history is not None:
-            messages: list[LLMMessage] = history + [LLMMessage(role="user", content=task)]
-        else:
-            messages = [LLMMessage(role="system", content=system_content), LLMMessage(role="user", content=task)]
+        messages = self._initial_messages(sid, system_content, task)
 
         budget = ContextBudget(max_tokens=self.settings.max_session_tokens)
         result = TaskResult(success=False, session_id=sid, trace_id=self.obs.trace_id)
@@ -174,53 +166,94 @@ class Orchestrator:
         for step in range(self.config.max_iterations):
             if budget.over_soft:
                 messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
-            try:
-                resp = guarded(self.router.chat, messages, tools=tool_schemas or None, allow=(ErrorClass.TRANSIENT,))
-            except CtxOverflowError:
-                messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
-                continue
-            except Exception as e:
-                self.obs.error(classify(e), str(e))
-                result.error = f"[{classify(e)}] {e}"
+            resp = self._chat_safely(messages, tool_schemas)
+            if resp is None:
                 return result
 
             budget.reserve(resp.usage.total or _est(resp.content))
             self.obs.token_usage(resp.usage.prompt_tokens, resp.usage.completion_tokens, budget.used)
 
             if resp.tool_calls:
-                messages.append(LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls))
-                for tc in resp.tool_calls:
-                    self._confirm_if_dangerous(tc.name, tc.arguments)
-                    r = self.tools.call(tc.name, tc.arguments)
-                    self.obs.tool_called(tc.name, r.ok, r.error or "")
-                    result.trajectory.append({"action": f"tool:{tc.name}", "detail": tc.arguments, "outcome": r.ok})
-                    messages.append(LLMMessage(role="tool", name=tc.name, tool_call_id=tc.id, content=r.output or r.error or ""))
+                messages, result = self._handle_tool_calls(messages, resp, result, sid)
                 continue
 
-            result.success = True
-            result.answer = resp.content
-            result.used_skills = [s.name for s in skills]
-            result.token_usage = budget.used
-            messages.append(LLMMessage(role="assistant", content=resp.content))
-            with self._session_lock:
-                self._session_histories[sid] = messages
-            self.storage.store_session(sid, summary=resp.content[:200], token_usage=budget.used)
-            self.storage.log_trajectory(
-                tid=f"traj:{uuid4().hex[:10]}", session_id=sid, outcome=True,
-                used_skills=result.used_skills,
-                data={"task": task, "trajectory": result.trajectory, "answer": resp.content},
-            )
-            if self.config.auto_evolve and len(result.trajectory) >= 3:
-                tool_actions = {t.get("action", "") for t in result.trajectory if t.get("action")}
-                if len(tool_actions) >= 2:
-                    steps = [t["detail"].get("query") or t["action"] for t in result.trajectory]
-                    rec = propose_skill(task, [str(s) for s in steps], self.settings.skills_dir, llm=self.router.primary, registry=self.registry)
-                    self.registry.register(rec)
-                    result.candidate_skill = rec.name
-                    self.obs.emit("skill_proposed", skill=rec.name)
-            return result
+            return self._finalize_success(messages, resp, result, skills, sid, budget, task)
 
         result.error = "max iterations reached without a final answer"
+        return result
+
+    def _select_skills(self, task: str) -> list:
+        try:
+            return select_skills(self.registry, task)
+        except Exception:
+            return []
+
+    def _initial_messages(self, sid: str, system_content: str, task: str) -> list[LLMMessage]:
+        with self._session_lock:
+            history = self._session_histories.get(sid)
+        if history is not None:
+            return history + [LLMMessage(role="user", content=task)]
+        return [LLMMessage(role="system", content=system_content), LLMMessage(role="user", content=task)]
+
+    def _chat_safely(self, messages: list[LLMMessage], tool_schemas: list[dict]) -> LLMResponse | None:
+        try:
+            return guarded(self.router.chat, messages, tools=tool_schemas or None, allow=(ErrorClass.TRANSIENT,))
+        except CtxOverflowError:
+            return self._handle_ctx_overflow()
+        except Exception as e:
+            self.obs.error(classify(e), str(e))
+            return None
+
+    def _handle_ctx_overflow(self) -> None:
+        self._compact_messages([], keep_tokens=self.settings.max_session_tokens // 4)
+
+    def _handle_tool_calls(
+        self,
+        messages: list[LLMMessage],
+        resp: LLMResponse,
+        result: TaskResult,
+        sid: str,
+    ) -> tuple[list[LLMMessage], TaskResult]:
+        messages.append(LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls))
+        for tc in resp.tool_calls:
+            self._confirm_if_dangerous(tc.name, tc.arguments)
+            r = self.tools.call(tc.name, tc.arguments)
+            self.obs.tool_called(tc.name, r.ok, r.error or "")
+            result.trajectory.append({"action": f"tool:{tc.name}", "detail": tc.arguments, "outcome": r.ok})
+            messages.append(LLMMessage(role="tool", name=tc.name, tool_call_id=tc.id, content=r.output or r.error or ""))
+        return messages, result
+
+    def _finalize_success(
+        self,
+        messages: list[LLMMessage],
+        resp: LLMResponse,
+        result: TaskResult,
+        skills: list,
+        sid: str,
+        budget: ContextBudget,
+        task: str,
+    ) -> TaskResult:
+        result.success = True
+        result.answer = resp.content
+        result.used_skills = [s.name for s in skills]
+        result.token_usage = budget.used
+        messages.append(LLMMessage(role="assistant", content=resp.content))
+        with self._session_lock:
+            self._session_histories[sid] = messages
+        self.storage.store_session(sid, summary=resp.content[:200], token_usage=budget.used)
+        self.storage.log_trajectory(
+            tid=f"traj:{uuid4().hex[:10]}", session_id=sid, outcome=True,
+            used_skills=result.used_skills,
+            data={"task": task, "trajectory": result.trajectory, "answer": resp.content},
+        )
+        if self.config.auto_evolve and len(result.trajectory) >= 3:
+            tool_actions = {t.get("action", "") for t in result.trajectory if t.get("action")}
+            if len(tool_actions) >= 2:
+                steps = [t["detail"].get("query") or t["action"] for t in result.trajectory]
+                rec = propose_skill(task, [str(s) for s in steps], self.settings.skills_dir, llm=self.router.primary, registry=self.registry)
+                self.registry.register(rec)
+                result.candidate_skill = rec.name
+                self.obs.emit("skill_proposed", skill=rec.name)
         return result
 
     def _run_internal_streaming(self, task: str, sid: str) -> Iterator[LLMResponse]:
