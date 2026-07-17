@@ -234,6 +234,23 @@ class Storage:
                 "INSERT INTO fts_memory_ix(content, session_id, ts) VALUES(?,?,?)", (content, session_id, _now())
             )
 
+    def list_sessions(self) -> list[dict[str, Any]]:
+        """Return all sessions with message count (from FTS index) and last activity."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT s.id, s.created_at, s.summary, s.token_usage, "
+                "(SELECT COUNT(*) FROM fts_memory f WHERE f.session_id = s.id) AS message_count "
+                "FROM sessions s ORDER BY s.created_at DESC LIMIT 100"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_session(self, session_id: str) -> None:
+        """Delete a session and its associated memory entries."""
+        with self._tx():
+            self._conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            self._conn.execute("DELETE FROM fts_memory WHERE session_id = ?", (session_id,))
+            self._conn.execute("DELETE FROM fts_memory_ix WHERE session_id = ?", (session_id,))
+
     def search_memory(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Full-text search over indexed memory; falls back to substring scan if FTS5 is unavailable."""
         if not self.has_fts5():
