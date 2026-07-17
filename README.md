@@ -3,7 +3,7 @@
 [![CI](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-75%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0%20(non--commercial)-blue)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v0.6.1-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.6.1)
 
 A **self-improving personal AI agent** with a reliability-first core.
@@ -275,4 +275,10 @@ Tests cover: basic interaction, memory persistence, multi-tool tasks, error hand
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+This software is licensed under the Apache License 2.0 with additional commercial-use restrictions (see [LICENSE](LICENSE) Section 10).
+
+**You may use this work for non-commercial purposes**, including personal use, teaching, and academic research, at no cost.
+
+**Commercial use requires a separate license.** If you intend to use this work in any commercial scenario — including but not limited to selling, SaaS hosting, embedding in commercial products, or revenue-generating consulting — you must obtain prior written authorization from the Licensor.
+
+For commercial licensing inquiries, please submit an issue at https://github.com/Alex663028/pulse-agent/issues.

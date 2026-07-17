@@ -173,6 +173,29 @@
       incurred by, or claims asserted against, such Contributor by reason
       of your accepting any such warranty or additional liability.
 
+   10. Commercial Use Restriction.
+
+      a. Non-commercial Use. You may use the Work for non-commercial
+         purposes, including personal use, teaching, and academic research,
+         without additional authorization from the Licensor, provided that
+         such use complies with all other terms of this License.
+
+      b. Commercial Use. Any use of the Work for commercial purposes,
+         including but not limited to:
+         - Selling, licensing, or distributing the Work for a fee;
+         - Providing SaaS, cloud-hosted, or managed service offerings
+           based on the Work;
+         - Embedding the Work into commercial products or services;
+         - Using the Work to generate revenue through consulting,
+           advertising, or data monetization;
+         requires prior written authorization and a separate commercial
+         license agreement from the Licensor.
+
+      c. Commercial Licensing Inquiries. To request a commercial license,
+         please submit an issue at:
+         https://github.com/Alex663028/pulse-agent/issues
+         or contact the Licensor directly.
+
    END OF TERMS AND CONDITIONS
 
    APPENDIX: How to apply the Apache License to your work.
