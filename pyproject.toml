@@ -1,6 +1,6 @@
 [project]
 name = "pulse-agent"
-version = "0.4.2"
+version = "0.6.0"
 description = "Pulse — a Hermes-style self-improving personal AI agent, rebuilt with a lightweight core: reliability-first orchestration, an evaluated skill self-evolution loop, and zero-config local hosting."
 readme = "README.md"
 requires-python = ">=3.11"
