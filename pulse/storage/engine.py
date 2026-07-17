@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS skill_versions (
     status TEXT,
     created_at TEXT NOT NULL,
     metrics TEXT,
+    content_snapshot TEXT,
     UNIQUE(skill_name, version)
 );
 CREATE TABLE IF NOT EXISTS fts_memory (
@@ -81,6 +82,20 @@ class Storage:
         # Enable WAL for better read concurrency across threads.
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
+        # Schema migration: add content_snapshot column if missing
+        self._migrate_schema(conn)
+
+    def _migrate_schema(self, conn) -> None:
+        """Apply incremental schema migrations for existing databases."""
+        # Check if content_snapshot column exists in skill_versions
+        try:
+            cursor = conn.execute("PRAGMA table_info(skill_versions)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "content_snapshot" not in columns:
+                conn.execute("ALTER TABLE skill_versions ADD COLUMN content_snapshot TEXT")
+                conn.commit()
+        except sqlite3.OperationalError:
+            pass  # table may not exist yet, next executescript will create it
 
     @property
     def _conn(self) -> sqlite3.Connection:
@@ -206,12 +221,13 @@ class Storage:
         path: str,
         status: str,
         metrics: dict[str, Any],
+        content_snapshot: str | None = None,
     ) -> None:
-        """Persist a skill version snapshot."""
+        """Persist a skill version snapshot, optionally storing an immutable content snapshot."""
         with self._tx():
             self._conn.execute(
-                "INSERT OR REPLACE INTO skill_versions(id, skill_name, version, path, status, created_at, metrics) VALUES(?,?,?,?,?,?,?)",
-                (f"{skill_name}@{version}", skill_name, version, path, status, _now(), json.dumps(metrics)),
+                "INSERT OR REPLACE INTO skill_versions(id, skill_name, version, path, status, created_at, metrics, content_snapshot) VALUES(?,?,?,?,?,?,?,?)",
+                (f"{skill_name}@{version}", skill_name, version, path, status, _now(), json.dumps(metrics), content_snapshot),
             )
 
     def skill_versions(self, skill_name: str) -> list[dict[str, Any]]:

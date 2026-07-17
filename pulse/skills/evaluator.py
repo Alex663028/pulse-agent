@@ -109,9 +109,7 @@ class SkillEvaluator:
         if base_sr is not None:
             if sr < base_sr - REGRESSION_DELTA:
                 # regressed vs a known-good baseline -> roll back to it
-                if candidate.status == "promoted":
-                    return "rollback", f"regressed vs baseline ({sr:.2f} < {base_sr:.2f})"
-                return "quarantine", f"regressed vs baseline ({sr:.2f} < {base_sr:.2f})"
+                return "rollback", f"regressed vs baseline ({sr:.2f} < {base_sr:.2f})"
             if sr >= base_sr:
                 return "promote", f"meets/exceeds baseline ({sr:.2f} >= {base_sr:.2f})"
             # slightly below baseline but above min -> refine, keep candidate
@@ -119,14 +117,26 @@ class SkillEvaluator:
         # No baseline: accept if it clears the bar.
         return "promote", f"clears min success_rate ({sr:.2f})"
 
-    def apply(self, result: EvalResult, candidate: SkillRecord) -> None:
-        """Persist the decision: update status + record the eval run."""
+    def apply(self, result: EvalResult, candidate: SkillRecord, baseline: Optional[SkillRecord] = None) -> None:
+        """Persist the decision: update status + record the eval run.
+
+        For rollback decisions, also invokes the versioning.rollback() path
+        to restore the baseline's known-good SKILL.md content durably.
+        """
         new_status = DECISION_TO_STATUS.get(result.decision, "candidate")
+
+        # Rollback: restore the baseline/known-good version durably
+        if result.decision == "rollback":
+            from pulse.skills.versioning import rollback
+            target_version = baseline.version if baseline else None
+            rollback(self.registry, candidate.name, to_version=target_version)
+            new_status = "promoted"
+
         self.registry.update_status(candidate.name, new_status, metrics=result.metrics)
         self.registry.storage.record_eval(
             run_id=f"{candidate.name}-{int(__import__('time').time())}",
             skill_id=f"{candidate.name}@{candidate.version}",
-            baseline_id=None,
+            baseline_id=f"{baseline.name}@{baseline.version}" if baseline else None,
             decision=result.decision,
             metrics=result.metrics,
         )

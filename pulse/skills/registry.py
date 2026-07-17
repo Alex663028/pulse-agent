@@ -77,10 +77,17 @@ class SkillRegistry:
         rec.status = status
         if metrics:
             rec.metrics.update(metrics)
+        # On promotion, store an immutable content snapshot for durable rollback
+        content = None
+        if status == "promoted":
+            skill_md = rec.path / "SKILL.md"
+            if skill_md.exists():
+                content = skill_md.read_text(encoding="utf-8")
         self.storage.save_skill_version(
             skill_name=rec.name,
             version=rec.version,
             path=str(rec.path),
             status=status,
             metrics=rec.metrics,
+            content_snapshot=content,
         )
