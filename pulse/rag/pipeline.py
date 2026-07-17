@@ -6,10 +6,8 @@ vector stores. Falls back to SQLite FTS5 if no vector store is configured.
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import os
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional

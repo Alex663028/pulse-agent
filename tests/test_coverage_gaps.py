@@ -1,22 +1,15 @@
 """Coverage-improving tests for low-coverage pulse modules."""
 from __future__ import annotations
 
-import json
-import os
-import sys
-import tempfile
-import textwrap
-import time
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
 
 from pulse.skills.evaluator import RunOutcome, SkillEvaluator
 from pulse.skills.executable import (
-    BaseExecutableSkill,
     SkillHandle,
     load_executable_skills,
     run_skill_tests,
@@ -24,14 +17,12 @@ from pulse.skills.executable import (
 from pulse.skills.evolution import _slug, propose_skill
 from pulse.skills.hub import _find_skill_dir, install_skill
 from pulse.skills.trigger import keyword_select, select
-from pulse.skills.loader import SkillRecord, load_skill_dir
+from pulse.skills.loader import SkillRecord
 from pulse.tools.core import (
     EditFileTool,
     HttpClientTool,
     PythonExecTool,
     ShellExecTool,
-    WebFetchTool,
-    WebSearchTool,
     WriteFileTool,
 )
 from pulse.tools.loader import (

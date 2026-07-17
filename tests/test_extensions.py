@@ -2,12 +2,8 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from pulse.observability.tracing import LangFuseTracer, LangSmithTracer, Trace, TraceStore
 from pulse.rag.pipeline import Document, RAGPipeline
@@ -115,8 +111,8 @@ class TestLangSmithTracer:
         tracer.export([])  # should not raise
 
     def test_enabled_calls_endpoint(self):
-        tracer = LangSmithTracer(api_key="k")
-        with patch("pulse.observability.tracing.urllib.request.urlopen") as mock_urlopen:
+        tracer = LangSmithTracer(api_key="k", endpoint="https://api.langsmith.com")
+        with patch("urllib.request.urlopen") as mock_urlopen:
             tracer.export([Trace(trace_id="t1", span_id="s1", name="n")])
             assert mock_urlopen.called
 
@@ -128,7 +124,7 @@ class TestLangFuseTracer:
 
     def test_enabled_calls_endpoint(self):
         tracer = LangFuseTracer(public_key="p", secret_key="s")
-        with patch("pulse.observability.tracing.urllib.request.urlopen") as mock_urlopen:
+        with patch("urllib.request.urlopen") as mock_urlopen:
             tracer.export([Trace(trace_id="t1", span_id="s1", name="n")])
             assert mock_urlopen.called
 

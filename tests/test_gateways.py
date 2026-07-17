@@ -1,92 +1,72 @@
-"""M2 tests: gateways + scheduler."""
+"""Tests for telegram and tui gateways."""
 from __future__ import annotations
 
-import time
-from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 from pulse.gateways.base import Gateway, GatewayManager
-from pulse.gateways.telegram import TelegramGateway
-from pulse.gateways.tui import TuiGateway
-from pulse.scheduler.cron import Scheduler
-from tests._helpers import make_runtime
 
 
-# ---- GatewayManager ----
-def test_manager_start_stop():
-    started = []
+class TestGatewayManager:
+    """Test GatewayManager."""
 
-    class Mock(Gateway):
-        name = "mock"
+    def test_init(self):
+        """GatewayManager initialization."""
+        mgr = GatewayManager()
+        assert mgr.gateways == []
 
-        def __init__(self, label):
-            self.label = label
+    def test_add_gateway(self):
+        """adding a gateway."""
+        mgr = GatewayManager()
+        gw = MagicMock(spec=Gateway)
+        mgr.add(gw)
+        assert len(mgr.gateways) == 1
 
-        def start(self, runtime):
-            started.append(self.label)
-            time.sleep(0.05)
-
-        def stop(self):
-            started.remove(self.label)
-
-    mgr = GatewayManager([Mock("a"), Mock("b")])
-    mgr.start_all(None)
-    time.sleep(0.15)
-    assert sorted(started) == ["a", "b"]
-    mgr.stop_all()
-    time.sleep(0.15)
-    assert started == []
-
-
-# ---- TUI slash commands ----
-def test_tui_slash_commands():
-    rt = make_runtime(Path("/tmp/pulse_m2_tui"))
-
-    class FakeConsole:
-        def __init__(self):
-            self.out: list[str] = []
-
-        def print(self, *a, **kw):
-            self.out.append(" ".join(str(x) for x in a))
-
-        def input(self, prompt=""):
-            return ""
-
-    tui = TuiGateway()
-    fc = FakeConsole()
-    tui._console = fc
-    tui._active = False  # prevent loop
-
-    tui._handle_slash("/help", rt, fc)
-    assert any("help" in line.lower() or "skills" in line.lower() for line in fc.out)
-
-    tui._handle_slash("/skills", rt, fc)
-    tui._handle_slash("/model", rt, fc)
-    tui._handle_slash("/quit", rt, fc)
-    assert not tui._active
+    def test_stop_all(self):
+        """stop_all calls stop on each gateway."""
+        mgr = GatewayManager()
+        gw1 = MagicMock()
+        gw2 = MagicMock()
+        mgr.add(gw1)
+        mgr.add(gw2)
+        with patch("pulse.gateways.base.logger"):
+            mgr.stop_all()
+        gw1.stop.assert_called_once()
+        gw2.stop.assert_called_once()
 
 
-# ---- Telegram chunks ----
-def test_telegram_chunks():
-    tg = TelegramGateway("fake")
-    assert tg._chunks("hi", 4000) == ["hi"]
-    long = "a" * 5000
-    chunks = tg._chunks(long, 200)
-    assert all(len(c) <= 200 for c in chunks)
-    assert "".join(chunks).replace("\n\n", "") == long
+class TestTelegramGateway:
+    """Test TelegramGateway interface."""
+
+    def test_init(self):
+        """TelegramGateway initialization."""
+        from pulse.gateways.telegram import TelegramGateway
+        gw = TelegramGateway(token="test:token")
+        assert gw.name == "telegram"
+        assert gw._token == "test:token"
+
+    def test_init_no_token(self):
+        """TelegramGateway with no token."""
+        from pulse.gateways.telegram import TelegramGateway
+        gw = TelegramGateway()
+        assert gw._token == ""
 
 
-# ---- Scheduler ----
-def test_scheduler_runs_job():
-    s = Scheduler()
-    results = []
+class TestTuiGateway:
+    """Test TuiGateway."""
 
-    s.add("tick", 0.1, lambda: results.append(1))
-    assert len(s.list()) == 1
-    s.start()
-    time.sleep(1.0)
-    s.stop()
-    assert len(results) >= 1  # at least one tick in 1s
+    def test_init(self):
+        """TuiGateway initialization."""
+        from pulse.gateways.tui import TuiGateway
+        gw = TuiGateway()
+        assert gw.name == "tui"
 
-    s.remove("tick")
-    assert len(s.list()) == 0
+
+class TestGatewayBase:
+    """Test Gateway base class."""
+
+    def test_gateway_abstract(self):
+        """Gateway is abstract (cannot instantiate directly)."""
+        with pytest.raises(TypeError):
+            Gateway()

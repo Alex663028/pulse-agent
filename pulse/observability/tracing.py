@@ -7,8 +7,6 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import urllib.request
-import urllib.parse
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
