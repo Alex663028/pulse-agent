@@ -120,10 +120,20 @@ class WriteFileTool(Tool):
     }
 
     def run(self, path: str = "", content: str = "", **kwargs: Any) -> ToolResult:
-        """Write ``content`` to ``path``, creating parent directories."""
+        """Write ``content`` to ``path``, creating parent directories.
+        
+        Creates a checkpoint snapshot if the file already exists.
+        """
         try:
             p = Path(path)
             p.parent.mkdir(parents=True, exist_ok=True)
+            # Create checkpoint if file exists
+            if p.exists():
+                try:
+                    from pulse.security import create_checkpoint
+                    create_checkpoint(p, label="write_file")
+                except Exception:
+                    pass
             p.write_text(content, encoding="utf-8")
             return ToolResult(ok=True, output=f"wrote {len(content)} chars to {path}")
         except Exception as e:
@@ -147,7 +157,10 @@ class EditFileTool(Tool):
     }
 
     def run(self, path: str = "", old_string: str = "", new_string: str = "", **kwargs: Any) -> ToolResult:
-        """Replace ``old_string`` with ``new_string`` in file ``path``."""
+        """Replace ``old_string`` with ``new_string`` in file ``path``.
+        
+        Automatically creates a checkpoint snapshot before modification.
+        """
         try:
             p = Path(path)
             if not p.exists():
@@ -155,6 +168,12 @@ class EditFileTool(Tool):
             content = p.read_text(encoding="utf-8")
             if old_string not in content:
                 return ToolResult(ok=False, error="old_string not found in file")
+            # Create checkpoint before modification
+            try:
+                from pulse.security import create_checkpoint
+                create_checkpoint(p, label="edit_file")
+            except Exception:
+                pass  # checkpoint failure should not block the edit
             new_content = content.replace(old_string, new_string)
             p.write_text(new_content, encoding="utf-8")
             return ToolResult(ok=True, output=f"edited {path}")

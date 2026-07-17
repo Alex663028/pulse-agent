@@ -10,12 +10,13 @@ This is the core "self-improving" loop that distinguishes Pulse from vanilla age
 """
 from __future__ import annotations
 
-import json
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from pulse.net import safe_parse_json
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +96,7 @@ class EvolutionAnalyzer:
 
         tool_failure_counts: dict[str, int] = {}
         for t in trajectories:
-            data_str = t.get("data", "{}")
-            try:
-                data = json.loads(data_str) if isinstance(data_str, str) else {}
-            except json.JSONDecodeError:
-                data = {}
+            data = safe_parse_json(t.get("data"))
             for step in data.get("trajectory", []):
                 if not step.get("outcome", True):
                     tool = step.get("action", "").replace("tool:", "")
@@ -123,11 +120,7 @@ class EvolutionAnalyzer:
         signals = []
         trajectories = self.storage.query_trajectories(limit=200)
         for t in trajectories:
-            data_str = t.get("data", "{}")
-            try:
-                data = json.loads(data_str) if isinstance(data_str, str) else {}
-            except json.JSONDecodeError:
-                data = {}
+            data = safe_parse_json(t.get("data"))
             for step in data.get("trajectory", []):
                 action = step.get("action", "")
                 if not step.get("outcome", True) and action.startswith("tool:"):
@@ -148,11 +141,7 @@ class EvolutionAnalyzer:
 
         task_patterns: dict[str, int] = {}
         for t in trajectories:
-            data_str = t.get("data", "{}")
-            try:
-                data = json.loads(data_str) if isinstance(data_str, str) else {}
-            except json.JSONDecodeError:
-                data = {}
+            data = safe_parse_json(t.get("data"))
             task = data.get("task", "")
             if task:
                 key = " ".join(task.split()[:3]).lower()
@@ -176,11 +165,7 @@ class EvolutionAnalyzer:
         trajectories = self.storage.query_trajectories(limit=50)
 
         for t in trajectories:
-            data_str = t.get("data", "{}")
-            try:
-                data = json.loads(data_str) if isinstance(data_str, str) else {}
-            except json.JSONDecodeError:
-                data = {}
+            data = safe_parse_json(t.get("data"))
             traj = data.get("trajectory", [])
             if len(traj) > 15:
                 signals.append(EvolutionSignal(

@@ -1,12 +1,12 @@
 """Usage analytics and insights for the agent."""
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 from pulse.config.settings import Settings
+from pulse.net import safe_parse_json
 from pulse.storage.engine import Storage
 
 
@@ -57,12 +57,9 @@ class UsageInsights:
         # Skills usage
         for t in recent:
             skills_str = t.get("used_skills", "[]")
-            try:
-                skills = json.loads(skills_str) if isinstance(skills_str, str) else []
-                for sk in skills:
-                    stats.skills_used[sk] = stats.skills_used.get(sk, 0) + 1
-            except (json.JSONDecodeError, TypeError):
-                pass
+            skills = safe_parse_json(skills_str) if isinstance(skills_str, str) else []
+            for sk in skills:
+                stats.skills_used[sk] = stats.skills_used.get(sk, 0) + 1
 
         return stats
 

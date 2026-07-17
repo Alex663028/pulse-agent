@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
+from pulse.net import safe_parse_json
 from pulse.storage.engine import Storage
 
 SYSTEM_TEMPLATE = (
@@ -20,7 +21,7 @@ SYSTEM_TEMPLATE = (
 
 
 def _to_chatml(traj: dict[str, Any]) -> dict[str, Any]:
-    data = json.loads(traj["data"]) if isinstance(traj.get("data"), str) else (traj.get("data") or {})
+    data = safe_parse_json(traj.get("data"))
     messages = [
         {"role": "system", "content": SYSTEM_TEMPLATE},
         {"role": "user", "content": data.get("task", "")},
@@ -40,7 +41,7 @@ def _to_chatml(traj: dict[str, Any]) -> dict[str, Any]:
 
 
 def _to_sharegpt(traj: dict[str, Any]) -> dict[str, Any]:
-    data = json.loads(traj["data"]) if isinstance(traj.get("data"), str) else (traj.get("data") or {})
+    data = safe_parse_json(traj.get("data"))
     task = data.get("task", "")
     answer = data.get("answer", "")
     return {

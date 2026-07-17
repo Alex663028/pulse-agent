@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+from pulse.net import safe_parse_json
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,10 +80,7 @@ def compute_reward(trajectory: dict[str, Any]) -> float:
     outcome = bool(trajectory.get("outcome"))
     used_skills = trajectory.get("used_skills", [])
     if isinstance(used_skills, str):
-        try:
-            used_skills = json.loads(used_skills)
-        except json.JSONDecodeError:
-            used_skills = []
+        used_skills = safe_parse_json(used_skills) if isinstance(used_skills, str) else []
     reward = 1.0 if outcome else -0.2
     reward += 0.1 * min(len(used_skills), 3)
     return float(max(-1.0, min(1.0, reward)))
@@ -93,7 +92,7 @@ def backfill_rewards(storage: Any, limit: int = 500) -> int:
     trainer = RLTrainer(storage)
     for row in rows:
         reward = compute_reward(row)
-        data = json.loads(row["data"]) if isinstance(row.get("data"), str) else (row.get("data") or {})
+        data = safe_parse_json(row.get("data"))
         trainer.add_sample(RewardSample(
             session_id=row.get("session_id", ""),
             prompt=data.get("task", ""),
