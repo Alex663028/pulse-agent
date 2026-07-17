@@ -267,19 +267,42 @@ class Storage:
             self._conn.execute("DELETE FROM fts_memory WHERE session_id = ?", (session_id,))
             self._conn.execute("DELETE FROM fts_memory_ix WHERE session_id = ?", (session_id,))
 
-    def search_memory(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        """Full-text search over indexed memory; falls back to substring scan if FTS5 is unavailable."""
+    def search_sessions(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Full-text search across all session memory (FTS5)."""
         if not self.has_fts5():
-            with self._lock:
-                rows = self._conn.execute("SELECT * FROM fts_memory ORDER BY ts DESC").fetchall()
-            q = query.lower()
-            return [dict(r) for r in rows if q in (r["content"] or "").lower()][:limit]
+            return self._fallback_session_search(query, limit)
         with self._lock:
             rows = self._conn.execute(
-                "SELECT *, rank FROM fts_memory_ix WHERE fts_memory_ix MATCH ? ORDER BY rank LIMIT ?",
+                "SELECT content, session_id, ts, rank FROM fts_memory_ix WHERE fts_memory_ix MATCH ? ORDER BY rank LIMIT ?",
                 (query, limit),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # Backward compatibility alias
+    search_memory = search_sessions
+
+    def _fallback_session_search(self, query: str, limit: int) -> list[dict[str, Any]]:
+        """Fallback substring search when FTS5 is unavailable."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT content, session_id, ts FROM fts_memory ORDER BY ts DESC LIMIT 100"
+            ).fetchall()
+        q = query.lower()
+        return [dict(r) for r in rows if q in (r["content"] or "").lower()][:limit]
+
+    def sessions_for_query(self, query: str, limit: int = 5) -> list[str]:
+        """Return session IDs that match a query, most recent first."""
+        hits = self.search_sessions(query, limit=limit * 3)
+        seen = set()
+        result = []
+        for h in hits:
+            sid = h.get("session_id", "")
+            if sid not in seen:
+                seen.add(sid)
+                result.append(sid)
+                if len(result) >= limit:
+                    break
+        return result
 
     def close(self) -> None:
         """Close the underlying SQLite connection(s)."""

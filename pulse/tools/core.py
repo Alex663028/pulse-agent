@@ -225,9 +225,28 @@ class ShellExecTool(Tool):
     }
 
     def run(self, command: str = "", timeout: int = 10, **kwargs: Any) -> ToolResult:
-        """Execute a shell command and return stdout (best-effort)."""
+        """Execute a shell command and return stdout (best-effort).
+
+        Applies secret redaction and command approval when configured.
+        """
+        from pulse.security import redact_secrets, requires_approval, is_blocked, ApprovalMode
+
         if not command or not command.strip():
             return ToolResult(ok=False, error="empty command")
+
+        # Check if command is blocked
+        if is_blocked(command):
+            return ToolResult(ok=False, error="command blocked (too dangerous)")
+
+        # Check if approval needed
+        mode = kwargs.get("approval_mode", ApprovalMode.OFF)
+        if requires_approval(command, mode):
+            # Return a prompt for user approval
+            return ToolResult(
+                ok=False,
+                error=f"approval_required: command '{command[:80]}' requires user confirmation (mode={mode})",
+            )
+
         try:
             timeout = max(1, min(int(timeout), 60))
             result = subprocess.run(
@@ -238,6 +257,8 @@ class ShellExecTool(Tool):
                 timeout=timeout,
             )
             output = result.stdout.strip() + (f"\n[stderr] {result.stderr.strip()}" if result.stderr.strip() else "")
+            # Redact secrets from output
+            output = redact_secrets(output, enabled=kwargs.get("redact_secrets", False))
             if result.returncode != 0:
                 return ToolResult(ok=False, error=f"exit {result.returncode}: {output}")
             return ToolResult(ok=True, output="(no output)" if not output else output)

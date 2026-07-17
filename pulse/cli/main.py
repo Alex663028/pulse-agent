@@ -400,7 +400,58 @@ def rl_export(
     console.print(f"[green]✓ exported {n} trajectories → {out}[/green]")
 
 
-# ---- plugin subcommands ----
+# ---- analytics subcommands ----
+analytics_app = typer.Typer(help="Usage analytics and insights.")
+app.add_typer(analytics_app, name="insights")
+
+
+@analytics_app.command()
+def insights(
+    days: int = typer.Option(30, "--days", "-d", help="Number of days to analyze"),
+):
+    """Display usage analytics (sessions, tokens, success rate)."""
+    from pulse.analytics import UsageInsights
+
+    rt = bootstrap()
+    usage = UsageInsights(rt.storage, rt.settings)
+    console.print(Panel(usage.insights_text(days), title="Pulse Analytics", border_style="cyan"))
+
+
+@analytics_app.command("curator")
+def curator(
+    action: str = typer.Option("status", help="status|run|archive"),
+    name: str = typer.Option(None, help="skill name"),
+):
+    """Skill curator: background maintenance for agent-created skills."""
+    from pulse.skills.curator import SkillCurator
+
+    rt = bootstrap()
+    curator = SkillCurator(rt.settings.skills_dir)
+    if action == "status":
+        stats = curator.get_stats(name)
+        if name:
+            if stats:
+                console.print(f"[bold]{name}[/bold]")
+                for k, v in stats.items():
+                    console.print(f"  {k}: {v}")
+            else:
+                console.print(f"[yellow]No stats for {name}[/yellow]")
+        else:
+            all_stats = curator.get_stats()
+            if not all_stats:
+                console.print("[yellow]No skills tracked yet.[/yellow]")
+            for s in all_stats:
+                console.print(f"  [bold{s['name']}[/bold] state={s['state']} uses={s['use_count']}")
+    elif action == "run":
+        report = curator.run_maintenance(registry=rt.registry)
+        console.print(f"[green]✓ maintenance complete:[/green] {report}")
+    elif action == "archive":
+        if not name:
+            console.print("[red]--name required[/red]")
+            return
+        curator.pin(name)  # Use pin as "do not archive" toggle
+
+
 @plugin_app.command("list")
 def plugin_list():
     """List available plugins."""
