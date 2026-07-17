@@ -1,10 +1,10 @@
 # Pulse — Self-improving AI Agent (Reliability-First)
 
 [![CI](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-76%25-yellow)](https://github.com/Alex663028/pulse-agent)
+[![Coverage](https://img.shields.io/badge/coverage-75%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.6.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.6.0)
+[![Release](https://img.shields.io/badge/release-v0.6.1-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.6.1)
 
 A **self-improving personal AI agent** with a reliability-first core.
 Compatible with the [agentskills.io](https://agentskills.io) open standard.
@@ -16,20 +16,28 @@ Compatible with the [agentskills.io](https://agentskills.io) open standard.
 
 | Feature | Detail |
 |---------|--------|
-| **Web UI** | Session management dashboard on port **10000** — browser-based chat, tool listing, settings |
-| **Social Gateways** | Feishu, WeChat, WhatsApp — async webhook-based bridges to external chat platforms |
-| **10 Built-in Tools** | web_search, web_fetch, write_file, edit_file, python_exec, shell_exec, http_client + original read/list/dir/calc |
+| **Web UI** | React SPA on port **10000** — browser-based chat, sessions, tools, skills (no build step) |
+| **Security** | Shell command approval (manual/smart/off), secret redaction, filesystem checkpoints |
+| **Multi-Profile** | Isolated configs/sessions/skills per profile via `PULSE_PROFILE` env var |
+| **Streaming** | `--stream` flag for real-time token output; tool-call events shown inline |
+| **Social Gateways** | Telegram (long-polling), Feishu, WeChat, WhatsApp (webhook) |
+| **10 Built-in Tools** | web_search, web_fetch, write_file, edit_file, python_exec, shell_exec, http_client + read/list/dir/calc |
 | **Dynamic Tools** | Drop `.yaml`, `.json`, `.py` into `~/.pulse/tools/` — auto-registered at startup |
 | **Executable Skills** | Skills can declare tools, self-test, hot-reload — `BaseExecutableSkill` + `SkillHandle` |
-| **Session Memory** | Multi-turn conversations within same session; previous turns auto-injected as context |
+| **Session Memory** | Multi-turn conversations; FTS5 cross-session search; session-scoped recall |
 | **Streaming Output** | `Orchestrator.run_stream()` yields token chunks; TUI shows live spinner |
 | **Plan→Execute→Verify** | System prompt drives step-by-step planning with `DANGEROUS_TOOLS` audit |
 | **Feedback Loop** | `add_correction("always use type hints")` → remembered in future system prompts |
 | **Reliability-first** | Every LLM/tool call wrapped in classified error recovery + exponential backoff + hard token budget guardrail |
+| **Circuit Breaker** | Per-provider circuit breaker (5 failures → 30s cooldown); automatic failover |
 | **Provider Fallback** | Ollama → OpenRouter → Anthropic chain + token-bucket rate limiter |
-| **Skill Evaluation** | Golden-task replay before promote/quarantine/rollback; only complex multi-tool tasks trigger evolution |
+| **Skill Evaluation** | Golden-task replay before promote/quarantine/rollback; immutable content snapshots |
+| **Skill Curator** | Background maintenance for agent-created skills (stale detection, archive) |
+| **Usage Analytics** | `pulse insights` — sessions, tokens, success rate, top skills |
+| **RAG Pipeline** | Document ingestion, chunking, vector search (SQLite FTS5) |
+| **Observability** | Structured traces to LangSmith/LangFuse |
 | **File Logging** | `~/.pulse/logs/pulse.log` with daily rotation (7 days retained) |
-| **Container Ready** | Dockerfile + `.dockerignore`; health check on port 8080/10000 |
+| **Container Ready** | Dockerfile + Makefile; health check on port 8080/10000 |
 
 ---
 
@@ -44,17 +52,19 @@ pip install -e .
 # 2. Zero-config (local Ollama — no API key needed)
 pulse init --yes --provider ollama --model qwen2.5:7b
 
-# 3. Web UI (browser-based dashboard)
+# 3. Web UI (React SPA, no build step)
 pulse web start              # http://127.0.0.1:10000
-pulse web start --token SITE_SECRET   # enable bearer auth
 
 # 4. Interactive TUI
 pulse tui
 
 # 5. Start everything (gateways + web + cron)
-pulse serve --gateway telegram --gateway feishu
+pulse serve
 
-# 6. Self-check
+# 6. Streaming chat
+pulse chat "hello" --stream
+
+# 7. Self-check
 pulse doctor
 ```
 
@@ -81,12 +91,12 @@ graph TD
     end
 
     ORCH["Orchestrator"]
-    ROUTER["Router (fallback + rate limiter)"]
+    ROUTER["Router (fallback + circuit breaker + rate limiter)"]
 
     ORCH --> ROUTER
     ROUTER --> P["OpenAI / Anthropic / Ollama / OpenRouter / DeepSeek / Mock"]
 
-    ORCH --> MEM["Memory"]
+    ORCH --> MEM["Memory (FTS5 + Session Search)"]
     ORCH --> TOOLS["Tools"]
     ORCH --> SUB["Sub-agent Pool"]
     ORCH --> TEAM["Team Pipeline"]
@@ -98,9 +108,8 @@ graph TD
     TOOLS --> MCP["MCP Servers"]
     TOOLS --> SKILL_TOOLS["Skill-declared"]
 
-    MEM --> FTS5["SQLite FTS5"]
-    MEM --> SESSION["Session History (multi-turn)"]
-    MEM --> CORRECTIONS["User Corrections"]
+    SEC["Security (Approval / Redaction / Checkpoints)"]
+    TOOLS -.-> SEC
 
     WEB --> ORCH
     TUI --> ORCH
@@ -112,6 +121,7 @@ graph TD
 
     style ORCH fill:#7c3aed,color:#fff
     style WEB fill:#0891b2,color:#fff
+    style SEC fill:#dc2626,color:#fff
 ```
 
 ---
@@ -120,16 +130,20 @@ graph TD
 
 | Command | Description |
 |---------|-------------|
-| `pulse web start` | Web UI dashboard on port **10000** (add `--token SITE_SECRET` to enable auth) |
+| `pulse web start` | Web UI dashboard on port **10000** |
 | `pulse tui` | Interactive terminal chat with live streaming |
-| `pulse chat <task>` | One-shot task |
+| `pulse chat <task>` | One-shot task (add `--stream` for real-time output) |
 | `pulse serve` | Start all gateways + web UI + scheduler |
 | `pulse fork <task>` | Decompose into parallel sub-agents with recursive recovery |
 | `pulse team <task>` | Multi-agent team (Builder → Reviewer → Ship) |
 | `pulse skills list\|install\|eval\|promote\|rollback` | Skill lifecycle |
-| `pulse tools list\|reload` | Dynamic tool management |
 | `pulse mcp list\|add\|remove\|test` | MCP server management |
 | `pulse cron list\|add\|remove\|pause\|resume` | Cron scheduler |
+| `pulse rl export` | Export trajectories for RL fine-tuning |
+| `pulse insights` | Usage analytics (sessions, tokens, success rate) |
+| `pulse insights curator` | Skill curator status and maintenance |
+| `pulse profile list\|create\|switch` | Multi-profile management |
+| `pulse docs --topic quickstart\|features\|security` | Embedded documentation |
 | `pulse health --port 8080` | Health check endpoint |
 | `pulse doctor` | Self-check |
 
@@ -177,11 +191,55 @@ def test() -> list[str]:
 
 | Platform | Setup |
 |----------|-------|
+| **Telegram** | Long-polling; set `TELEGRAM_BOT_TOKEN` env var |
 | **Feishu** | App credentials → call `feishu.handle_webhook(body)` |
 | **WeChat** | Token/AES key → verify signature in `wechat.handle_webhook(...)` |
 | **WhatsApp** | Meta Cloud API → call `wa.handle_webhook(body, params)` |
 
-All gateways are webhook-based — mount in your Flask/FastAPI, no polling needed.
+---
+
+## Security
+
+Pulse provides three layers of defense:
+
+**1. Command Approval** — dangerous shell commands require user confirmation:
+- `manual` mode — prompt on `rm -rf`, `git reset --hard`, `chmod 777`, etc.
+- `smart` mode — prompt only on destructive ops
+- `off` — no prompts (YOLO)
+
+**2. Secret Redaction** — API keys, bearer tokens, private keys are automatically redacted in tool output.
+
+**3. Filesystem Checkpoints** — snapshot files before destructive operations; restore on failure.
+
+Configure in `~/.pulse/config.yaml`:
+```yaml
+approval_mode: manual  # off | manual | smart
+redact_secrets: true
+```
+
+---
+
+## Multi-Profile
+
+Run multiple isolated instances (separate config, sessions, skills, memory):
+
+```bash
+pulse profile list            # show all profiles
+pulse profile create work     # create "work" profile
+PULSE_PROFILE=work pulse chat "hello"  # use work profile
+```
+
+---
+
+## Streaming
+
+Real-time token output as the LLM responds:
+
+```bash
+pulse chat "write a long article" --stream
+```
+
+The `--stream` flag shows tokens as they arrive and displays tool-call events inline.
 
 ---
 
@@ -192,7 +250,7 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Tests cover: basic interaction, memory persistence, multi-tool tasks, error handling, streaming, feedback learning, builtin tools, gateway signature verification.
+Tests cover: basic interaction, memory persistence, multi-tool tasks, error handling, streaming, feedback learning, builtin tools, gateway signature verification, skill rollback, security approval, secret redaction.
 
 ---
 
@@ -210,6 +268,8 @@ Tests cover: basic interaction, memory persistence, multi-tool tasks, error hand
 | v0.5.0 — Web UI, streaming, session memory, feedback loop | ✅ |
 | v0.5.1 — Dockerfile, E2E tests, file logging, plugin sandbox | ✅ |
 | v0.5.2 — Social gateways (Feishu/WeChat/WhatsApp), dynamic tools, recursive sub-agents | ✅ |
+| v0.6.0 — Circuit breaker, optimistic lock, async, tool filtering, React SPA | ✅ |
+| v0.6.1 — Security redaction, command approval, checkpoints, session search, curator, analytics | ✅ |
 
 ---
 

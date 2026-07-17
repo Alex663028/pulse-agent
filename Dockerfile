@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+LABEL version="0.6.1"
+LABEL description="Pulse — Self-improving AI Agent (Reliability-First)"
+LABEL repository="https://github.com/Alex663028/pulse-agent"
+
 WORKDIR /app
 
 # Install system dependencies

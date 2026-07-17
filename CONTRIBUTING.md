@@ -8,7 +8,7 @@ Thanks for your interest in improving Pulse! This guide covers setup, developmen
 git clone https://github.com/Alex663028/pulse-agent.git
 cd pulse-agent
 pip install -e ".[dev]"
-python -m pytest -q   # verify 96 tests pass
+python -m pytest -q   # verify 389+ tests pass
 ```
 
 ## Project Structure
@@ -16,18 +16,24 @@ python -m pytest -q   # verify 96 tests pass
 ```
 pulse/
 ├── cli/           # Typer commands and init wizard
-├── config/        # Settings, pydantic models
+├── config/        # Settings, pydantic models, profiles
 ├── orchestrator/  # Core loop, error recovery, token budget, sub-agents
-├── llm/           # Provider abstraction (OpenAI-compat, Anthropic, Mock)
+├── llm/           # Provider abstraction (OpenAI-compat, Anthropic, Mock, Async)
 ├── memory/        # MEMORY.md/USER.md, FTS5, dialectic profiling
-├── skills/        # agentskills.io loader, evaluation loop, versioning
-├── tools/         # Built-in tools, tool registry
+├── skills/        # agentskills.io loader, evaluation loop, versioning, curator
+├── tools/         # Built-in tools, tool registry, shell approval
 ├── plugins/       # Plugin discovery and activation
-├── gateways/      # TUI, Telegram, gateway manager
+├── gateways/      # TUI, Telegram, Feishu, WeChat, WhatsApp
 ├── scheduler/     # Cron scheduler
 ├── team/          # Multi-agent team orchestration
 ├── rl/            # RL trajectory export
-└── storage/       # SQLite + FTS5 engine
+├── security/      # Secret redaction, command approval, checkpoints
+├── resilience/    # Circuit breaker, retry with backoff
+├── rag/           # RAG pipeline, vector stores
+├── observability/ # LangSmith/LangFuse tracing
+├── storage/       # SQLite + FTS5 engine, optimistic locking
+├── analytics/     # Usage insights
+└── web/           # Flask + React SPA frontend
 ```
 
 ## Coding Standards
@@ -37,6 +43,8 @@ pulse/
 - **Exception handling** — avoid bare `except Exception`. Catch specific exceptions. If a broad catch is unavoidable, add a `# noqa: BLE001` comment explaining why.
 - **Testing** — new features must include tests. Aim for ≥80% coverage on new code.
 - **No new dependencies** without justification. Prefer stdlib.
+- **Secret safety** — never log or persist raw API keys, tokens, or private keys. Use `redact_secrets()`.
+- **Command approval** — any new shell-executing tool must integrate with `pulse/security` approval flow.
 
 ## Commit Convention
 
@@ -48,6 +56,8 @@ fix: resolve token budget overflow
 docs: update README
 test: add compactor tests
 chore: bump version
+refactor: extract circuit breaker
+security: add password redaction pattern
 ```
 
 ## Pull Request Flow
@@ -78,6 +88,7 @@ python -m pytest --cov=pulse --cov-report=term-missing
 2. Set `name`, `description`, `parameters` (JSON schema)
 3. Implement `run(**kwargs) -> ToolResult`
 4. Register in `pulse/tools/builtin.py`
+5. If your tool runs shell commands, integrate with `pulse/security` approval
 
 ## Adding a Plugin
 
@@ -85,3 +96,20 @@ python -m pytest --cov=pulse --cov-report=term-missing
 2. Define a `register(runtime)` function
 3. Call `runtime.tools.register(MyTool())` inside it
 4. Test with `pulse plugin activate myplugin`
+
+## Security Guidelines
+
+- **Shell execution**: All shell commands MUST go through `ShellExecTool` which enforces approval.
+- **Secrets**: Never echo raw credentials; always pass through `redact_secrets()`.
+- **Checkpoints**: Use `create_checkpoint()` before destructive file operations.
+- **Blocked commands**: Do not bypass the blocklist (`rm -rf /`, `dd if=/dev/zero of=/dev/sda`).
+
+## Version Policy
+
+Version numbers are aligned across:
+- `pyproject.toml` — `[project] version`
+- `pulse/__init__.py` — `__version__`
+- `README.md` — release badge
+- Git tags — `vX.Y.Z`
+
+When bumping, update ALL four locations. Current version: **0.6.1**.
