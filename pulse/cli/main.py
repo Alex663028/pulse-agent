@@ -736,5 +736,85 @@ def docs(
     console.print(Panel(tutorial["content"].strip(), title=tutorial["title"], border_style="blue"))
 
 
+# ---- evolution subcommands ----
+evolve_app = typer.Typer(help="Self-evolution: analyze runtime patterns and propose improvements.")
+app.add_typer(evolve_app, name="evolve")
+
+
+@evolve_app.command("analyze")
+def evolve_analyze(
+    limit: int = typer.Option(50, "--limit", "-l", help="Number of recent trajectories to analyze"),
+):
+    """Analyze runtime patterns and propose self-improvements."""
+    from pulse.evolution import EvolutionAnalyzer, EvolutionEngine
+
+    rt = bootstrap()
+    analyzer = EvolutionAnalyzer(rt.storage, rt.registry)
+    engine = EvolutionEngine(analyzer, rt.settings.skills_dir)
+
+    proposals = engine.generate_proposals()
+
+    if not proposals:
+        console.print("[green]No improvement opportunities detected.[/green]")
+        return
+
+    console.print(f"[cyan]Found {len(proposals)} improvement opportunity(s):[/cyan]\n")
+    for i, p in enumerate(proposals, 1):
+        signals_str = ", ".join(s.kind for s in p.signals)
+        console.print(f"  {i}. [bold]{p.title}[/bold]")
+        console.print(f"     Action: {p.action} | Target: {p.target}")
+        console.print(f"     Signals: {signals_str}")
+        if p.description:
+            console.print(f"     {p.description[:80]}")
+        console.print()
+
+
+@evolve_app.command("status")
+def evolve_status():
+    """Show evolution system status: signals detected vs. applied."""
+    from pulse.evolution import EvolutionAnalyzer
+
+    rt = bootstrap()
+    analyzer = EvolutionAnalyzer(rt.storage, rt.registry)
+    signals = analyzer.analyze()
+
+    console.print("[cyan]Evolution Status[/cyan]")
+    console.print(f"Signals detected: {len(signals)}")
+    for s in signals:
+        console.print(f"  [{s.kind}] {s.source}: {s.description[:60]} (conf={s.confidence:.2f})")
+
+
+@evolve_app.command("apply")
+def evolve_apply(
+    index: int = typer.Argument(..., help="Index of proposal to apply (from 'evolve analyze')"),
+):
+    """Apply a queued evolution proposal."""
+    from pulse.evolution import EvolutionAnalyzer, EvolutionEngine
+
+    rt = bootstrap()
+    analyzer = EvolutionAnalyzer(rt.storage, rt.registry)
+    engine = EvolutionEngine(analyzer, rt.settings.skills_dir)
+    proposals = engine.generate_proposals()
+
+    if not proposals:
+        console.print("[yellow]No proposals available.[/yellow]")
+        return
+
+    if index < 1 or index > len(proposals):
+        console.print(f"[red]Invalid index. Use 1-{len(proposals)}[/red]")
+        return
+
+    proposal = proposals[index - 1]
+    console.print(f"Applying: {proposal.title}")
+    result = engine.apply_proposal(proposal)
+
+    if result["status"] == "applied":
+        console.print(f"[green]Applied successfully:[/green] {result}")
+    elif result["status"] == "queued":
+        console.print(f"[yellow]Queued for review:[/cyan] {result.get('reason', '')}")
+    else:
+        console.print(f"[red]Status: {result['status']}[/red]")
+
+
 if __name__ == "__main__":
     app()

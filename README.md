@@ -36,6 +36,7 @@ Compatible with the [agentskills.io](https://agentskills.io) open standard.
 | **Usage Analytics** | `pulse insights` — sessions, tokens, success rate, top skills |
 | **RAG Pipeline** | Document ingestion, chunking, vector search (SQLite FTS5) |
 | **Observability** | Structured traces to LangSmith/LangFuse |
+| **Self-Evolution** | `pulse evolve analyze` — detects failure patterns, skill gaps, prompt drift; proposes improvements |
 | **File Logging** | `~/.pulse/logs/pulse.log` with daily rotation (7 days retained) |
 | **Container Ready** | Dockerfile + Makefile; health check on port 8080/10000 |
 
