@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from pulse.config.settings import Settings, load_settings
 from pulse.llm.config import build_router
@@ -34,8 +35,11 @@ class Runtime:
     mcp: Any = None
 
 
-def bootstrap(config_dir=None, load_mcp: bool = False) -> Runtime:
-    settings = load_settings(config_dir)
+def bootstrap(config_dir=None, load_mcp: bool = False, profile: Optional[str] = None) -> Runtime:
+    # Auto-detect profile from env var
+    if profile is None:
+        profile = os.environ.get("PULSE_PROFILE")
+    settings = load_settings(config_dir, profile=profile)
     _setup_logging(settings.log_level)
     storage = Storage(settings.db_path)
     memory = MemoryStore(settings, storage)

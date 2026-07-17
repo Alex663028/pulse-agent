@@ -63,6 +63,9 @@ class Settings(BaseModel):
     max_iterations: int = 20
     log_level: str = "INFO"
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
+    # Profile (multi-config isolation)
+    profile: str = "default"
+    profiles_dir: Path = Field(default_factory=lambda: Path.home() / ".pulse" / "profiles")
     # RAG config
     rag_enabled: bool = False
     rag_chunk_size: int = 500
@@ -73,6 +76,12 @@ class Settings(BaseModel):
     langsmith_api_key: str = ""
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
+    # Security config
+    approval_mode: str = "manual"  # off | manual | smart
+    redact_secrets: bool = True
+    # Context quality
+    context_compact_ratio: float = 0.8
+    context_max_tool_output_chars: int = 5000
 
     @property
     def data_dir(self) -> Path:
@@ -110,8 +119,20 @@ class Settings(BaseModel):
             d.mkdir(parents=True, exist_ok=True)
 
 
-def load_settings(config_dir: Optional[Path] = None) -> Settings:
-    """Load settings from ``config.yaml`` if present, else defaults."""
+def get_profile_dir(profile: str = "default") -> Path:
+    """Return the config directory for a named profile."""
+    if profile == "default":
+        return default_config_dir()
+    return Path.home() / ".pulse" / "profiles" / profile
+
+
+def load_settings(config_dir: Optional[Path] = None, profile: Optional[str] = None) -> Settings:
+    """Load settings from ``config.yaml`` if present, else defaults.
+
+    If ``profile`` is specified, loads from that profile's directory.
+    """
+    if profile:
+        config_dir = get_profile_dir(profile)
     cfg = Path(config_dir) if config_dir else default_config_dir()
     path = cfg / "config.yaml"
     if not path.exists():
@@ -139,7 +160,7 @@ def load_settings(config_dir: Optional[Path] = None) -> Settings:
 def save_settings(s: Settings) -> Path:
     """Persist settings to ``config.yaml`` (secrets are NOT written here)."""
     s.ensure_dirs()
-    payload = s.model_dump(exclude={"config_dir", "data_dir"})
+    payload = s.model_dump(exclude={"config_dir", "data_dir", "profiles_dir"})
     # data_dir is derived; store only if non-default for clarity
     payload["data_dir"] = str(s.data_dir)
     path = s.config_dir / "config.yaml"
@@ -166,8 +187,6 @@ def load_env(s: Settings) -> dict[str, str]:
                 f"Consider running: chmod 600 {s.env_path}"
             )
     except OSError:
-        logging.getLogger(__name__).exception("oserror suppressed")
-        pass
         pass
     for line in s.env_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()

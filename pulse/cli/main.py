@@ -103,20 +103,35 @@ def doctor():
 def chat(
     task: str = typer.Argument(..., help="the task or message"),
     session: str = typer.Option(None, help="resume a session id"),
+    stream: bool = typer.Option(False, "--stream", "-s", help="Show streaming output as LLM responds"),
 ):
     """Run a task through the orchestrator."""
     rt = bootstrap(load_mcp=True)
-    with console.status("[cyan]Thinking…[/cyan]"):
-        res = rt.orchestrator.run(task, session_id=session)
-    if res.used_skills:
-        console.print(f"[dim]skills:[/dim] {', '.join(res.used_skills)}")
-    if res.candidate_skill:
-        console.print(f"[cyan]↳ proposed candidate skill:[/cyan] {res.candidate_skill} (run `pulse skills eval {res.candidate_skill}`)")
-    if res.success:
-        console.print(Panel(res.answer or "(no content)", title="Pulse", border_style="green"))
+    if stream:
+        # Streaming mode: show tokens as they arrive
+        console.print("[dim]Streaming...[/dim]")
+        answer_parts = []
+        for chunk in rt.orchestrator.run_stream(task, session_id=session):
+            if chunk.content:
+                console.print(chunk.content, end="", soft_wrap=True, style="cyan")
+                answer_parts.append(chunk.content)
+            if chunk.tool_calls:
+                for tc in chunk.tool_calls:
+                    console.print(f"\n[dim]→ tool: {tc.name}({tc.arguments})[/dim]")
+        console.print()  # newline
     else:
-        console.print(Panel(res.error or "failed", title="Pulse", border_style="red"))
-    console.print(f"[dim]tokens={res.token_usage} trace={res.trace_id}[/dim]")
+        # Non-streaming mode with spinner
+        with console.status("[cyan]Thinking…[/cyan]"):
+            res = rt.orchestrator.run(task, session_id=session)
+        if res.used_skills:
+            console.print(f"[dim]skills:[/dim] {', '.join(res.used_skills)}")
+        if res.candidate_skill:
+            console.print(f"[cyan]↳ proposed candidate skill:[/cyan] {res.candidate_skill} (run `pulse skills eval {res.candidate_skill}`)")
+        if res.success:
+            console.print(Panel(res.answer or "(no content)", title="Pulse", border_style="green"))
+        else:
+            console.print(Panel(res.error or "failed", title="Pulse", border_style="red"))
+        console.print(f"[dim]tokens={res.token_usage} trace={res.trace_id}[/dim]")
 
 
 @app.command()
@@ -573,6 +588,152 @@ def web_start(
     import sys
     sys.argv = ["pulse-web", "--port", str(port), "--host", host] + (["--debug"] if debug else [])
     web_main()
+
+
+# ---- profile subcommands ----
+profile_app = typer.Typer(help="Manage named profiles (isolated configs/sessions/skills).")
+app.add_typer(profile_app, name="profile")
+
+
+@profile_app.command("list")
+def profile_list():
+    """List available profiles."""
+    profiles = ["default"]
+    profiles_dir = Path.home() / ".pulse" / "profiles"
+    if profiles_dir.exists():
+        for d in sorted(profiles_dir.iterdir()):
+            if d.is_dir() and (d / "config.yaml").exists():
+                profiles.append(d.name)
+    for p in profiles:
+        marker = "→ " if p == "default" else "  "
+        console.print(f"{marker}{p}")
+
+
+@profile_app.command("create")
+def profile_create(
+    name: str = typer.Argument(..., help="profile name (lowercase-hyphen)"),
+):
+    """Create a new profile with default config."""
+    from pulse.config.settings import get_profile_dir, save_settings, Settings
+
+    profile_dir = get_profile_dir(name)
+    if profile_dir.exists():
+        console.print(f"[red]profile '{name}' already exists[/red]")
+        return
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    s = Settings(config_dir=profile_dir)
+    s.ensure_dirs()
+    path = save_settings(s)
+    console.print(f"[green]✓ created profile:[/green] {name} ({path})")
+
+
+@profile_app.command("switch")
+def profile_switch(
+    name: str = typer.Argument(..., help="profile name"),
+):
+    """Show how to switch to a profile (use PULSE_PROFILE env var)."""
+    console.print(f"Switch to profile '{name}' by running:")
+    console.print(f"  [bold]PULSE_PROFILE={name} pulse[/bold]")
+    console.print("Or set it permanently:")
+    console.print(f"  [bold]echo 'export PULSE_PROFILE={name}' >> ~/.bashrc[/bold]")
+
+
+# ---- docs subcommands ----
+docs_app = typer.Typer(help="Open embedded documentation & tutorials.")
+app.add_typer(docs_app, name="docs")
+
+
+TUTORIALS = {
+    "quickstart": {
+        "title": "Quickstart",
+        "content": """
+[bold]Welcome to Pulse Agent[/bold]
+
+1. Initialize:
+   [cyan]pulse init[/cyan]
+   (interactive setup wizard — defaults to local Ollama)
+
+2. Chat:
+   [cyan]pulse chat "Hello, what can you do?"[/cyan]
+
+3. Start the Web UI:
+   [cyan]pulse web start[/cyan]
+
+4. Check health:
+   [cyan]pulse doctor[/cyan]
+
+5. Install a skill:
+   [cyan]pulse skills install <path-or-url>[/cyan]
+
+For the full feature list, see [cyan]pulse docs features[/cyan]
+"""
+    },
+    "features": {
+        "title": "Feature List",
+        "content": """
+[bold]Core Features:[/bold]
+• Self-improving skills: candidate → promoted → rollback lifecycle
+• Cross-session memory with FTS5 full-text search
+• Multi-LLM routing with fallback chain
+• Circuit breaker per provider (auto-failover)
+• Sub-agents with parallel execution & merge
+• Cron-scheduled tasks
+• MCP (Model Context Protocol) server integration
+
+[bold]Security:[/bold]
+• Shell command approval (manual/smart/off modes)
+• Automatic secret redaction in tool output
+• Filesystem checkpoints (snapshot/restore)
+
+[bold]Observability:[/bold]
+• Usage analytics: [cyan]pulse insights[/bold]
+• Skill curator: [cyan]pulse insights curator[/cyan]
+• Structured traces to LangSmith/LangFuse
+
+[bold]Multi-Profile:[/bold]
+• [cyan]pulse profile list[/cyan] / [cyan]pulse profile create <name>[/cyan]
+• Isolated config, sessions, skills per profile
+
+[bold]Web UI:[/bold]
+• React SPA at http://127.0.0.1:10000
+• Chat, sessions, tools, skills views
+"""
+    },
+    "security": {
+        "title": "Security Model",
+        "content": """
+[bold]Command Approval Modes:[/cyan]
+[cyan]manual[/cyan] — prompt on rm -rf, git reset --hard, chmod 777, etc.
+[cyan]smart[/cyan]   — prompt only on destructive ops
+[cyan]off[/cyan]     — no prompts (YOLO)
+
+Configure in [cyan]~/.pulse/config.yaml[/cyan]:
+  approval_mode: manual
+
+[bold]Secret Redaction:[/bold]
+API keys, bearer tokens, private keys are automatically redacted
+in tool output. Always-on, no config needed.
+
+[bold]Blocked Commands:[/bold]
+Some commands are always blocked regardless of mode:
+• rm -rf / (filesystem wipe)
+• dd if=/dev/zero of=/dev/sda (disk overwrite)
+"""
+    }
+}
+
+
+@docs_app.command()
+def docs(
+    topic: str = typer.Option("quickstart", "--topic", "-t", help="quickstart|features|security"),
+):
+    """Show embedded docs/tutorial for a topic."""
+    tutorial = TUTORIALS.get(topic)
+    if not tutorial:
+        console.print(f"[red]Unknown topic:[/red] {topic}")
+        console.print(f"Available: {', '.join(TUTORIALS.keys())}")
+        return
+    console.print(Panel(tutorial["content"].strip(), title=tutorial["title"], border_style="blue"))
 
 
 if __name__ == "__main__":

@@ -240,6 +240,15 @@ class ShellExecTool(Tool):
 
         # Check if approval needed
         mode = kwargs.get("approval_mode", ApprovalMode.OFF)
+        # Also check settings-level approval mode
+        if mode == ApprovalMode.OFF:
+            from pulse.config.settings import load_settings
+            try:
+                _s = load_settings()
+                _mode_map = {"off": ApprovalMode.OFF, "manual": ApprovalMode.MANUAL, "smart": ApprovalMode.SMART}
+                mode = _mode_map.get(_s.approval_mode, ApprovalMode.OFF)
+            except Exception:
+                pass
         if requires_approval(command, mode):
             # Return a prompt for user approval
             return ToolResult(
@@ -258,7 +267,7 @@ class ShellExecTool(Tool):
             )
             output = result.stdout.strip() + (f"\n[stderr] {result.stderr.strip()}" if result.stderr.strip() else "")
             # Redact secrets from output
-            output = redact_secrets(output, enabled=kwargs.get("redact_secrets", False))
+            output = redact_secrets(output, enabled=True)
             if result.returncode != 0:
                 return ToolResult(ok=False, error=f"exit {result.returncode}: {output}")
             return ToolResult(ok=True, output="(no output)" if not output else output)
