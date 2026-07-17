@@ -6,7 +6,6 @@ from pulse.llm.provider import (
     LLMMessage,
     LLMProvider,
     LLMResponse,
-    MockProvider,
     OpenAICompatProvider,
 )
 from pulse.llm.router import Router
@@ -18,7 +17,7 @@ __all__ = [
     "LLMMessage",
     "LLMProvider",
     "LLMResponse",
-    "MockProvider",
     "OpenAICompatProvider",
     "Router",
+    "StubProvider",
 ]

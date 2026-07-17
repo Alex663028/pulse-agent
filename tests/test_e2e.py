@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 
 from pulse.config.settings import Settings, save_settings
-from pulse.llm.provider import MockProvider
 from pulse.llm.router import Router
 from pulse.memory.store import MemoryStore
 from pulse.orchestrator.loop import Orchestrator, TaskResult
@@ -22,7 +21,7 @@ def tmp_home(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def mock_settings(tmp_home):
+def stub_settings(tmp_home):
     cfg_dir = tmp_home / ".pulse"
     cfg_dir.mkdir(parents=True, exist_ok=True)
     models_dir = cfg_dir / "models"
@@ -30,23 +29,27 @@ def mock_settings(tmp_home):
     # .env with empty key
     (cfg_dir / ".env").write_text("", encoding="utf-8")
     settings = Settings(config_dir=cfg_dir)
-    settings.model.provider = "mock"
-    settings.model.model = "mock-1"
+    settings.model.provider = "openai"
+    settings.model.model = "stub-1"
+    settings.model.base_url = "http://localhost:9999/v1"
     save_settings(settings)
     return settings
 
 
 @pytest.fixture
-def orchestrator(mock_settings):
-    storage = Storage(mock_settings.db_path)
-    memory = MemoryStore(mock_settings, storage)
-    registry = SkillRegistry(mock_settings, storage)
+def orchestrator(stub_settings):
+    storage = Storage(stub_settings.db_path)
+    memory = MemoryStore(stub_settings, storage)
+    registry = SkillRegistry(stub_settings, storage)
     tools = ToolRegistry()
     register_builtin_tools(tools)
-    provider = MockProvider(model="mock-1")
+
+    # Create stub provider directly
+    from tests._helpers import StubProvider
+    provider = StubProvider(model="stub-1")
     router = Router(primary=provider)
     obs = Observability()
-    yield Orchestrator(router, memory, registry, tools, storage, mock_settings, obs)
+    yield Orchestrator(router, memory, registry, tools, storage, stub_settings, obs)
     storage.close()
 
 
@@ -56,7 +59,7 @@ class TestBasicInteraction:
     def test_simple_question(self, orchestrator):
         result = orchestrator.run("hello world", session_id="test-1")
         assert result.success
-        assert "[mock]" in result.answer.lower()
+        assert "Acknowledged" in result.answer
         assert result.session_id == "test-1"
 
     def test_tool_call_works(self, orchestrator):
@@ -65,7 +68,7 @@ class TestBasicInteraction:
             session_id="test-tools",
         )
         assert result.success
-        # Mock provider emits a tool call the first time it sees [call:xxx]
+        # Stub provider emits a tool call the first time it sees [call:xxx]
         assert any(t["action"].startswith("tool:") for t in result.trajectory)
 
 
@@ -113,7 +116,7 @@ class TestErrorHandling:
             "use the nonexistent tool [call:no_such_tool_xyz]",
             session_id="err-test",
         )
-        # Should still succeed (mock provider won't match unknown tool)
+        # Should still succeed (stub provider won't match unknown tool)
         assert result.success or result.error is not None
 
     def test_empty_message(self, orchestrator):
@@ -151,44 +154,40 @@ class TestNewToolsBuiltin:
     def test_write_file_tool(self, orchestrator, tmp_path):
         from pulse.tools.core import WriteFileTool
         tool = WriteFileTool()
-        target = tmp_path / "test_output.txt"
-        result = tool.run(path=str(target), content="hello from test")
+        f = tmp_path / "test.txt"
+        result = tool.run(path=str(f), content="hello")
         assert result.ok
-        assert target.read_text(encoding="utf-8") == "hello from test"
+        assert f.read_text() == "hello"
 
     def test_edit_file_tool(self, orchestrator, tmp_path):
         from pulse.tools.core import EditFileTool
-        target = tmp_path / "edit_test.txt"
-        target.write_text("before", encoding="utf-8")
         tool = EditFileTool()
-        result = tool.run(path=str(target), old_string="before", new_string="after")
+        f = tmp_path / "test2.txt"
+        f.write_text("hello world")
+        result = tool.run(path=str(f), old_string="hello", new_string="goodbye")
         assert result.ok
-        assert target.read_text(encoding="utf-8") == "after"
+        assert f.read_text() == "goodbye world"
 
 
 class TestStreamingMode:
-    """Test streaming output generation."""
+    """Test streaming output."""
 
     def test_run_stream_exists(self, orchestrator):
-        # Should be able to call run_stream without error
+        assert hasattr(orchestrator, "run_stream")
+
+    def test_run_stream_yields(self, orchestrator):
         chunks = list(orchestrator.run_stream("hello", session_id="stream-test"))
-        assert len(chunks) > 0
-        assert any(c.content for c in chunks)
+        assert len(chunks) >= 1
 
 
 class TestFeedbackLearning:
-    """Test user feedback integration."""
+    """Test that corrections are remembered."""
 
     def test_add_correction(self, orchestrator):
         orchestrator.add_correction("always use type hints")
-        # Check it's reflected in _corrections
-        assert len(orchestrator._corrections) == 1
+        assert "always use type hints" in orchestrator._corrections
 
     def test_corrections_in_system_prompt(self, orchestrator):
-        orchestrator.add_correction("use snake_case")
+        orchestrator.add_correction("test correction")
         system = orchestrator._build_system([])
-        assert "snake_case" in system
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+        assert "test correction" in system

@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include Makefile
+include CONTRIBUTING.md
+recursive-include pulse *.py
+recursive-include pulse/plugins/bundled *
+prune **/__pycache__
+prune **/.pytest_cache
+prune tests

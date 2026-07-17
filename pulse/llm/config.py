@@ -1,13 +1,10 @@
 """Build a provider/router from application settings."""
 from __future__ import annotations
 
-
-
 from pulse.config.settings import DEFAULT_BASE_URL, Settings, load_env
 from pulse.llm.provider import (
     LLMError,
     LLMProvider,
-    MockProvider,
     OpenAICompatProvider,
 )
 from pulse.llm.router import Router
@@ -16,7 +13,7 @@ from pulse.llm.router import Router
 def _make_compat(settings: Settings, env: dict[str, str], provider: str) -> LLMProvider:
     ms = settings.model
     if provider == "ollama":
-        return OpenAICompatProvider(base_url=ms.base_url, api_key="", model=ms.model)
+        return OpenAICompatProvider(base_url=ms.base_url, api_key="ollama", model=ms.model)
     if provider == "anthropic":
         try:
             from pulse.llm.provider import AnthropicProvider
@@ -47,10 +44,7 @@ def build_router(settings: Settings) -> Router:
 
     env = load_env(settings)
     ms = settings.model
-    if ms.provider == "mock":
-        primary: LLMProvider = MockProvider(model=ms.model)
-    else:
-        primary = _make_compat(settings, env, ms.provider)
+    primary = _make_compat(settings, env, ms.provider)
 
     fallbacks: list[LLMProvider] = []
     for fb in ms.fallback:

@@ -10,7 +10,7 @@ import pytest
 
 from pulse.config.settings import DEFAULT_BASE_URL, ModelSettings, Settings
 from pulse.llm.config import build_router
-from pulse.llm.provider import LLMError, LLMMessage, LLMResponse, MockProvider, OpenAICompatProvider, ToolCall, Usage
+from pulse.llm.provider import LLMError, LLMMessage, LLMResponse, OpenAICompatProvider, ToolCall, Usage
 from pulse.memory.compactor import compact
 from pulse.memory.session_index import SessionIndex
 from pulse.scheduler.cron import Job, Scheduler, _cron_matches, parse_natural
@@ -34,18 +34,19 @@ def test_compactor_naive_long_text():
 
 
 def test_compactor_with_llm_success():
-    mock = MockProvider()
-    # Override to return a summary
-    mock.scripted = [LLMResponse(content="Summary: key points here.", model="mock")]
+    from tests._helpers import StubProvider
+    mock = StubProvider()
+    mock.add_scripted_response(LLMResponse(content="Summary: key points here.", model="stub"))
     result = compact("long text " * 200, keep_tokens=50, llm=mock)
     assert "Summary" in result
 
 
 def test_compactor_with_llm_failure_falls_back():
-    class FailingMock(MockProvider):
+    from tests._helpers import StubProvider
+    class FailingStub(StubProvider):
         def chat(self, *a, **kw):
             raise RuntimeError("LLM down")
-    result = compact("x" * 5000, keep_tokens=100, llm=FailingMock())
+    result = compact("x" * 5000, keep_tokens=100, llm=FailingStub())
     assert len(result) < 5000  # fell back to naive
 
 
@@ -157,18 +158,22 @@ def test_usage_total():
     assert u.total == 30
 
 
-def test_mock_provider_scripted():
-    r1 = LLMResponse(content="first", model="mock")
-    r2 = LLMResponse(content="second", model="mock")
-    p = MockProvider(scripted=[r1, r2])
+def test_stub_provider_scripted():
+    from tests._helpers import StubProvider
+    r1 = LLMResponse(content="first", model="stub")
+    r2 = LLMResponse(content="second", model="stub")
+    p = StubProvider()
+    p.add_scripted_response(r1)
+    p.add_scripted_response(r2)
     assert p.chat([LLMMessage(role="user", content="x")]).content == "first"
     assert p.chat([LLMMessage(role="user", content="x")]).content == "second"
 
 
-def test_mock_provider_no_tools_no_call_pattern():
-    p = MockProvider()
+def test_stub_provider_no_tools_no_call_pattern():
+    from tests._helpers import StubProvider
+    p = StubProvider()
     r = p.chat([LLMMessage(role="user", content="plain text")], tools=None)
-    assert r.content.startswith("[mock]")
+    assert r.content.startswith("Acknowledged")
 
 
 def test_openai_compat_provider_init():

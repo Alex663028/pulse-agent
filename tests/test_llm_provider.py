@@ -200,9 +200,8 @@ class TestAnthropicProvider:
             LLMMessage(role="system", content="You are Claude"),
             LLMMessage(role="user", content="Hi"),
         ]
-        system, filtered = provider._extract_system(messages)
+        system = provider._extract_system(messages)
         assert system == "You are Claude"
-        assert len(filtered) == 1
 
     def test_invoke_with_tools(self):
         """_invoke passes tools to API."""

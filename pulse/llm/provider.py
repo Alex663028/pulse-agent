@@ -5,14 +5,10 @@ proxy) speak the OpenAI ``/v1/chat/completions`` protocol, so a single
 ``OpenAICompatProvider`` covers them. Cloud providers (OpenAI, OpenRouter,
 DeepSeek, GLM, …) are the same protocol with an API key. Anthropic uses its
 own SDK and is added as a sibling provider.
-
-A built-in ``MockProvider`` lets the whole stack run fully offline for tests
-and demos without any model server.
 """
 from __future__ import annotations
 
 import json
-import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Iterator, Optional
@@ -104,7 +100,7 @@ class LLMProvider(ABC):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> LLMResponse:
-        """Run a chat completion against the underlying model and return a normalized ``LLMResponse``."""
+        """Send messages and return a normalized response."""
 
     def chat_stream(
         self,
@@ -113,31 +109,28 @@ class LLMProvider(ABC):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> Iterator[LLMResponse]:
-        """Yield incremental ``LLMResponse`` chunks (for streaming UIs).
-
-        Default implementation falls back to a single non-streaming ``chat()``
-        call. Providers that support streaming (OpenAI, Anthropic) should
-        override this.
-        """
+        """Stream chat completions (yields a single full response by default)."""
         yield self.chat(messages, tools=tools, tool_choice=tool_choice, **kwargs)
 
 
 def _estimate_tokens(text: str) -> int:
-    # Cheap, deterministic approximation (~3.2 chars/token for English/code,
-    # ~1.6 for CJK). Good enough for a budget guardrail, not for billing.
-    cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
-    other = len(text) - cjk
-    return max(1, cjk + int(other / 3.2))  # ~3.2 chars/token for English (was 4)
+    """Rough token estimate (~4 chars/token for mixed content)."""
+    return max(1, len(text) // 4)
 
 
 class OpenAICompatProvider(LLMProvider):
-    """OpenAI-compatible chat completions provider (OpenAI, Ollama, OpenRouter, DeepSeek, etc.)."""
+    """OpenAI-compatible chat completions provider.
+
+    Works with: OpenAI, OpenRouter, DeepSeek, Ollama, vLLM, SGLang, LM Studio,
+    LiteLLM, SiliconFlow, and any other endpoint implementing the
+    ``/v1/chat/completions`` protocol.
+    """
 
     name = "openai-compat"
 
     def __init__(self, base_url: str, api_key: str = "", model: str = "", timeout: float = 120.0):
-        self.base_url = base_url.rstrip("/") if base_url else base_url
-        self.api_key = api_key or "not-needed"
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
         self.model = model
         self.timeout = timeout
         self._client = None
@@ -211,7 +204,7 @@ class OpenAICompatProvider(LLMProvider):
         tool_choice: Optional[str] = None,
         **kwargs: Any,
     ) -> Iterator[LLMResponse]:
-        """Stream chat completions (yields a final concatenated ``LLMResponse`` chunk per token — best-effort, non-OpenAI-endpoints fall back to non-streaming)."""
+        """Stream chat completions (yields a final concatenated ``LLMResponse`` chunk per token)."""
         payload: dict[str, Any] = {
             "model": kwargs.pop("model", self.model),
             "messages": [m.to_openai() for m in messages],
@@ -225,6 +218,7 @@ class OpenAICompatProvider(LLMProvider):
         try:
             if self._client is None:
                 from openai import OpenAI
+
                 self._client = OpenAI(base_url=self.base_url, api_key=self.api_key, timeout=self.timeout)
             stream = self._client.chat.completions.create(**payload)
             full_content = ""
@@ -249,11 +243,7 @@ class OpenAICompatProvider(LLMProvider):
 
 
 class AnthropicProvider(LLMProvider):
-    """Anthropic Messages API provider (Claude).
-
-    Falls back to OpenAI protocol for non-Anthropic endpoints that
-    mimic Anthropic's tool-use format (e.g. some local proxies).
-    """
+    """Anthropic Messages API provider (Claude)."""
 
     name = "anthropic"
 
@@ -269,7 +259,7 @@ class AnthropicProvider(LLMProvider):
         self.api_key = api_key
         self.model = model
         self.max_tokens = max_tokens
-        self.api_mode = api_mode  # "messages" (Anthropic native) or "openai" (fallback)
+        self.api_mode = api_mode
         self._client = None
 
     def _ensure_client(self):
@@ -301,13 +291,10 @@ class AnthropicProvider(LLMProvider):
 
     def _extract_system(self, messages: list[LLMMessage]) -> str:
         system = ""
-        filtered: list[LLMMessage] = []
         for m in messages:
             if m.role == "system":
                 system = m.content or ""
-            else:
-                filtered.append(m)
-        return system, filtered
+        return system
 
     @staticmethod
     def _convert_tools(tools: Optional[list[dict[str, Any]]]) -> list[dict[str, Any]]:
@@ -346,7 +333,7 @@ class AnthropicProvider(LLMProvider):
                             ],
                         })
                 else:
-                    conversation.append({"role": "assistant", "content": [{"type": "text", "text": m.content or ""}]})
+                    conversation.append({"role": "assistant", "content": m.content or ""})
             elif m.role == "tool":
                 conversation.append({
                     "role": "user",
@@ -387,79 +374,26 @@ class AnthropicProvider(LLMProvider):
             )
 
             return self._parse_response(resp)
-
-        except Exception as e:
-            raise AnthropicError(f"Anthropic API error: {e}") from e
+        except (RuntimeError, OSError, ValueError) as e:
+            raise AnthropicError(f"anthropic request failed: {e}") from e
 
     @staticmethod
     def _parse_response(resp: Any) -> LLMResponse:
-        tool_calls: list[ToolCall] = []
-        content_text = ""
+        content = ""
+        tool_calls = []
         for block in resp.content:
             if block.type == "text":
-                content_text += block.text
+                content += block.text
             elif block.type == "tool_use":
-                tool_calls.append(
-                    ToolCall(
-                        id=block.id,
-                        name=block.name,
-                        arguments=block.input or {},
-                    )
-                )
+                tool_calls.append(ToolCall(id=block.id, name=block.name, arguments=block.input))
+        usage = Usage(
+            prompt_tokens=getattr(resp.usage, "input_tokens", 0) or 0,
+            completion_tokens=getattr(resp.usage, "output_tokens", 0) or 0,
+        )
         return LLMResponse(
-            content=content_text,
+            content=content,
             tool_calls=tool_calls,
             model=resp.model,
-            finish_reason=resp.stop_reason or "stop",
-        )
-
-
-class MockProvider(LLMProvider):
-    """Offline provider.
-
-    - If ``tools`` are supplied and the prompt contains a bracketed hint like
-      ``[call:tool_name]``, it emits that tool call (used by tests).
-    - Otherwise it returns a deterministic, templated answer and records fake
-      token usage so the context-budget guardrail is exercised end-to-end.
-    """
-
-    name = "mock"
-
-    def __init__(self, model: str = "mock-1", scripted: Optional[list[LLMResponse]] = None):
-        self.model = model
-        self.scripted = list(scripted or [])
-        self.calls: list[list[LLMMessage]] = []
-        self._last_tool: Optional[str] = None
-
-    def chat(
-        self,
-        messages: list[LLMMessage],
-        tools: Optional[list[dict[str, Any]]] = None,
-        tool_choice: Optional[str] = None,
-        **kwargs: Any,
-    ) -> LLMResponse:
-        """Return a scripted/deterministic response, optionally emitting a tool call hinted by ``[call:name]`` in the user turn.
-
-        ``_last_tool`` now tracks the last emitted tool; sessions can reset it
-        by passing ``mock_reset=True`` in kwargs (not required for most tests).
-        """
-        self.calls.append(list(messages))
-        last_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
-        if self.scripted:
-            return self.scripted.pop(0)
-        if tools:
-            m = re.search(r"\[call:([\w\-]+)\]", last_user)
-            # emit a given tool call at most once per task to avoid loops
-            if m and m.group(1) != self._last_tool:
-                self._last_tool = m.group(1)
-                return LLMResponse(
-                    content="",
-                    tool_calls=[ToolCall(id="call_1", name=m.group(1), arguments={"query": last_user})],
-                    model=self.model,
-                )
-        answer = f"[mock] Acknowledged: {last_user[:120]}"
-        return LLMResponse(
-            content=answer,
-            model=self.model,
-            usage=Usage(prompt_tokens=_estimate_tokens(last_user), completion_tokens=_estimate_tokens(answer)),
+            usage=usage,
+            finish_reason=resp.stop_reason or "end_turn",
         )

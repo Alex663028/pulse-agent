@@ -349,7 +349,7 @@ class PulseWebUI:
                 "base_url": self.runtime.settings.model.base_url,
                 "max_session_tokens": self.runtime.settings.max_session_tokens,
             },
-            providers=["ollama", "openai", "openrouter", "deepseek", "anthropic", "mock"],
+            providers=["ollama", "openai", "openrouter", "deepseek", "anthropic"],
         )
 
     def _route_api_create_session(self):

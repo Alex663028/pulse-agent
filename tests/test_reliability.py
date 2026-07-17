@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from pulse.config.settings import ModelSettings, Settings
-from pulse.llm.provider import LLMError, LLMMessage, MockProvider
+from pulse.llm.provider import LLMError, LLMMessage
 from pulse.llm.router import Router
 from pulse.memory.store import MemoryStore
 from pulse.orchestrator.context_budget import ContextBudget
@@ -100,7 +100,8 @@ def test_orchestrator_tool_loop_and_evolution():
 
 
 def test_mock_provider_no_tool_loop():
-    p = MockProvider()
+    from tests._helpers import StubProvider
+    p = StubProvider()
     r1 = p.chat([LLMMessage(role="user", content="do [call:calc] 1+1")], tools=[{"type": "function"}])
     assert r1.tool_calls and r1.tool_calls[0].name == "calc"
     r2 = p.chat([LLMMessage(role="user", content="do [call:calc] 1+1")], tools=[{"type": "function"}])

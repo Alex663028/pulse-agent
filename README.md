@@ -43,28 +43,48 @@ Compatible with the [agentskills.io](https://agentskills.io) open standard.
 
 ## Quick Start
 
-```bash
-# 1. Install
-pip install -e .
-# or: pip install -r requirements.txt
-# Dev: pip install -r requirements-dev.txt
+### Option 1: Install from GitHub (recommended)
 
-# 2. Zero-config (local Ollama — no API key needed)
+```bash
+pip install git+https://github.com/Alex663028/pulse-agent.git
+```
+
+### Option 2: Clone and install locally
+
+```bash
+git clone https://github.com/Alex663028/pulse-agent.git
+cd pulse-agent
+pip install -e .
+# or: pip install -e ".[dev]"  # for development
+```
+
+### Option 3: Using Makefile
+
+```bash
+git clone https://github.com/Alex663028/pulse-agent.git
+cd pulse-agent
+make install
+```
+
+### First run
+
+```bash
+# Zero-config (local Ollama — no API key needed)
 pulse init --yes --provider ollama --model qwen2.5:7b
 
-# 3. Web UI (React SPA, no build step)
+# Or use any OpenAI-compatible API
+pulse init --yes --provider openai --model gpt-4o
+
+# Web UI (React SPA, no build step)
 pulse web start              # http://127.0.0.1:10000
 
-# 4. Interactive TUI
+# Interactive TUI
 pulse tui
 
-# 5. Start everything (gateways + web + cron)
-pulse serve
-
-# 6. Streaming chat
+# Streaming chat
 pulse chat "hello" --stream
 
-# 7. Self-check
+# Self-check
 pulse doctor
 ```
 

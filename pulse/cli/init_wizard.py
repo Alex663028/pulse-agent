@@ -29,7 +29,6 @@ PROVIDERS = {
     "openai": "OpenAI (cloud, needs API key)",
     "openrouter": "OpenRouter (200+ models, needs key)",
     "deepseek": "DeepSeek (cloud, needs key)",
-    "mock": "Mock provider (offline demo, no model needed)",
 }
 
 
@@ -79,10 +78,6 @@ def run_init(
         ms.base_url = base
         ms.model = model or Prompt.ask("Model", default=DEFAULT_MODEL) if not non_interactive else (model or DEFAULT_MODEL)
         settings.api_key_env = ""
-    elif provider == "mock":
-        if base_url:
-            ms.base_url = base_url
-        ms.model = model or "mock-1"
     else:
         if base_url:
             ms.base_url = base_url
@@ -102,8 +97,6 @@ def run_init(
     console.print(f"\n[bold green]✓ Pulse configured at[/bold green] {settings.config_dir / 'config.yaml'}")
     if provider == "ollama":
         console.print("  Run [bold]pulse chat \"hello\"[/bold] to talk to your local model.")
-    elif provider == "mock":
-        console.print("  Run [bold]pulse chat \"hello\"[/bold] (offline mock mode).")
     else:
         console.print("  Run [bold]pulse chat \"hello\"[/bold] once your API key is set.")
     return settings

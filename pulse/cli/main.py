@@ -67,7 +67,7 @@ def _save_cron(rt, jobs: dict) -> None:
 
 @app.command()
 def init(
-    provider: str = typer.Option(None, help="ollama|openai|openrouter|deepseek|mock"),
+    provider: str = typer.Option(None, help="ollama|openai|openrouter|deepseek|anthropic"),
     model: str = typer.Option(None, help="model name, e.g. qwen2.5:7b"),
     api_key: str = typer.Option(None, help="API key for cloud providers"),
     base_url: str = typer.Option(None, "--base-url", help="Custom OpenAI-compatible endpoint base URL (e.g. https://my-gateway.example.com/v1)"),
