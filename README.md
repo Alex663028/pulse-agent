@@ -3,12 +3,10 @@
 [![CI](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-75%25-yellow)](https://github.com/Alex663028/pulse-agent)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
-[![License](https://img.shields.io/badge/license-Apache%202.0%20(non--commercial)-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.6.1-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.6.1)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![Release](https://img.shields.io/badge/release-v0.7.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.7.0)
 
-A **self-improving personal AI agent** with a reliability-first core.
-Compatible with the [agentskills.io](https://agentskills.io) open standard.
-**Fully self-hostable by default** — Ollama + SQLite FTS5, zero cloud dependency.
+A **self-improving personal AI agent** with a reliability-first core. Fully self-hostable by default — Ollama + SQLite FTS5, zero cloud dependency.
 
 ---
 
@@ -17,7 +15,7 @@ Compatible with the [agentskills.io](https://agentskills.io) open standard.
 | Feature | Detail |
 |---------|--------|
 | **Web UI** | React SPA on port **10000** — browser-based chat, sessions, tools, skills (no build step) |
-| **Security** | Shell command approval (manual/smart/off), secret redaction, filesystem checkpoints |
+| **Security** | Shell command approval (manual/smart/off), secret redaction, filesystem checkpoints, RBAC |
 | **Multi-Profile** | Isolated configs/sessions/skills per profile via `PULSE_PROFILE` env var |
 | **Streaming** | `--stream` flag for real-time token output; tool-call events shown inline |
 | **Social Gateways** | Telegram (long-polling), Feishu, WeChat, WhatsApp (webhook) |
@@ -89,12 +87,6 @@ pulse chat "hello" --stream
 pulse doctor
 ```
 
-**No Ollama?** Use the built-in mock provider for an offline demo:
-```bash
-pulse init --yes --provider mock
-pulse chat "hello world"
-```
-
 ---
 
 ## Architecture
@@ -115,7 +107,7 @@ graph TD
     ROUTER["Router (fallback + circuit breaker + rate limiter)"]
 
     ORCH --> ROUTER
-    ROUTER --> P["OpenAI / Anthropic / Ollama / OpenRouter / DeepSeek / Mock"]
+    ROUTER --> P["OpenAI / Anthropic / Ollama / OpenRouter / DeepSeek"]
 
     ORCH --> MEM["Memory (FTS5 + Session Search)"]
     ORCH --> TOOLS["Tools"]
@@ -129,7 +121,7 @@ graph TD
     TOOLS --> MCP["MCP Servers"]
     TOOLS --> SKILL_TOOLS["Skill-declared"]
 
-    SEC["Security (Approval / Redaction / Checkpoints)"]
+    SEC["Security (Approval / Redaction / Checkpoints / RBAC)"]
     TOOLS -.-> SEC
 
     WEB --> ORCH
@@ -158,14 +150,14 @@ graph TD
 | `pulse fork <task>` | Decompose into parallel sub-agents with recursive recovery |
 | `pulse team <task>` | Multi-agent team (Builder → Reviewer → Ship) |
 | `pulse skills list\|install\|eval\|promote\|rollback` | Skill lifecycle |
-| `pulse mcp list\|add\|remove\|test` | MCP server management |
+| `pulse mcp list\|add\|remove\|test\|export` | MCP server management |
 | `pulse cron list\|add\|remove\|pause\|resume` | Cron scheduler |
 | `pulse rl export` | Export trajectories for RL fine-tuning |
 | `pulse insights` | Usage analytics (sessions, tokens, success rate) |
 | `pulse insights curator` | Skill curator status and maintenance |
 | `pulse profile list\|create\|switch` | Multi-profile management |
-| `pulse docs --topic quickstart\|features\|security` | Embedded documentation |
-| `pulse health --port 8080` | Health check endpoint |
+| `pulse evolve analyze\|status\|apply` | Self-evolution (pattern analysis & proposals) |
+| `pulse health` | Health check endpoint |
 | `pulse doctor` | Self-check |
 
 ---
@@ -221,7 +213,7 @@ def test() -> list[str]:
 
 ## Security
 
-Pulse provides three layers of defense:
+Pulse provides four layers of defense:
 
 **1. Command Approval** — dangerous shell commands require user confirmation:
 - `manual` mode — prompt on `rm -rf`, `git reset --hard`, `chmod 777`, etc.
@@ -231,6 +223,8 @@ Pulse provides three layers of defense:
 **2. Secret Redaction** — API keys, bearer tokens, private keys are automatically redacted in tool output.
 
 **3. Filesystem Checkpoints** — snapshot files before destructive operations; restore on failure.
+
+**4. RBAC** — role-based access control with predefined roles (viewer/operator/developer/admin/auditor).
 
 Configure in `~/.pulse/config.yaml`:
 ```yaml
@@ -264,42 +258,50 @@ The `--stream` flag shows tokens as they arrive and displays tool-call events in
 
 ---
 
-## Running Tests
+## Self-Evolution
+
+The agent analyzes its own runtime patterns to detect:
+- **Repeated tool failures** (proposes fixes)
+- **Frequent task patterns** (proposes new skills)
+- **Inefficient trajectories** (proposes prompt refinements)
 
 ```bash
-pip install -r requirements-dev.txt
-python -m pytest -q
+pulse evolve analyze          # detect patterns and list proposals
+pulse evolve status           # show current signal counts
+pulse evolve apply N          # apply a specific proposal
 ```
-
-Tests cover: basic interaction, memory persistence, multi-tool tasks, error handling, streaming, feedback learning, builtin tools, gateway signature verification, skill rollback, security approval, secret redaction.
 
 ---
 
-## Roadmap
+## Running Tests
 
-| Phase | Status |
-|-------|--------|
-| M1 — Core orchestrator, memory, skill eval loop | ✅ |
-| M2 — Multi-platform gateways + scheduler | ✅ |
-| M3 — Sub-agent parallel pool + cron | ✅ |
-| M4 — RL trajectory export + dialectic user modeling | ✅ |
-| M5 — Plugin system + multi-agent team | ✅ |
-| v0.4.0 — Anthropic, rate limiter, bad-response fallback | ✅ |
-| v0.4.1 — P0-P2 reliability audit | ✅ |
-| v0.5.0 — Web UI, streaming, session memory, feedback loop | ✅ |
-| v0.5.1 — Dockerfile, E2E tests, file logging, plugin sandbox | ✅ |
-| v0.5.2 — Social gateways (Feishu/WeChat/WhatsApp), dynamic tools, recursive sub-agents | ✅ |
-| v0.6.0 — Circuit breaker, optimistic lock, async, tool filtering, React SPA | ✅ |
-| v0.6.1 — Security redaction, command approval, checkpoints, session search, curator, analytics | ✅ |
+```bash
+pip install -e ".[dev]"
+python -m pytest -q
+```
+
+Tests cover: basic interaction, memory persistence, multi-tool tasks, error handling, streaming, feedback learning, builtin tools, gateway signature verification, skill rollback, security approval, secret redaction, RBAC, audit logging.
+
+---
+
+## Version History
+
+| Version | Release Date | Key Changes |
+|---------|-------------|-------------|
+| v0.7.0 | 2025-07-18 | Enterprise RBAC, audit logging, SSO stub, i18n (en/zh) |
+| v0.6.1 | 2025-07-17 | Security redaction, command approval, checkpoints, session search, curator, analytics |
+| v0.6.0 | 2025-07-17 | Circuit breaker, optimistic lock, async, tool filtering, React SPA |
+| v0.5.2 | 2025-07-15 | Social gateways (Feishu/WeChat/WhatsApp), dynamic tools, recursive sub-agents |
+| v0.5.1 | 2025-07-15 | Dockerfile, E2E tests, file logging, plugin sandbox |
+| v0.5.0 | 2025-07-15 | Web UI, streaming, session memory, feedback loop |
+| v0.4.1 | 2025-07-15 | P0-P2 reliability audit |
+| v0.4.0 | 2025-07-15 | Anthropic, rate limiter, bad-response fallback |
+| v0.3.0 | 2025-07-15 | Core orchestrator, memory, skill eval loop |
 
 ---
 
 ## License
 
-This software is licensed under the Apache License 2.0 with additional commercial-use restrictions (see [LICENSE](LICENSE) Section 10).
+Pulse is open-source software licensed under the **Apache License 2.0** (see [LICENSE](LICENSE)).
 
-**You may use this work for non-commercial purposes**, including personal use, teaching, and academic research, at no cost.
-
-**Commercial use requires a separate license.** If you intend to use this work in any commercial scenario — including but not limited to selling, SaaS hosting, embedding in commercial products, or revenue-generating consulting — you must obtain prior written authorization from the Licensor.
-
-For commercial licensing inquiries, please submit an issue at https://github.com/Alex663028/pulse-agent/issues.
+You are free to use, modify, and distribute this software in source and binary form, for any purpose — including commercial use — under the terms of the Apache License 2.0. See the license text for details.
