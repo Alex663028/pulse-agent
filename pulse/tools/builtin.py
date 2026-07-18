@@ -1,8 +1,18 @@
-"""Register all built-in tools (core + original three)."""
+"""Register all built-in tools (core + coding + original three)."""
 
 from __future__ import annotations
 
 from pulse.tools.base import CalcTool, ListDirTool, ReadFileTool
+from pulse.tools.coding import (
+    GitDiffTool,
+    GitLogTool,
+    GitStatusTool,
+    GrepTool,
+    LintTool,
+    ProjectContextTool,
+    ReplTool,
+    TestRunnerTool,
+)
 from pulse.tools.core import (
     EditFileTool,
     HttpClientTool,
@@ -21,11 +31,22 @@ ALL_BUILTIN_TOOLS = [
     ReadFileTool(),
     ListDirTool(),
     CalcTool(),
-    # New
+    # File operations
     WriteFileTool(),
     EditFileTool(),
+    # Coding
+    GitStatusTool(),
+    GitDiffTool(),
+    GitLogTool(),
+    GrepTool(),
+    ReplTool(),
+    TestRunnerTool(),
+    LintTool(),
+    ProjectContextTool(),
+    # Web
     WebSearchTool(),
     WebFetchTool(),
+    # Execution
     PythonExecTool(),
     ShellExecTool(),
     HttpClientTool(),
