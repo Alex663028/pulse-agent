@@ -8,7 +8,7 @@ Thanks for your interest in improving Pulse! This guide covers setup, developmen
 git clone https://github.com/Alex663028/pulse-agent.git
 cd pulse-agent
 pip install -e ".[dev]"
-python -m pytest -q   # verify 389+ tests pass
+python -m pytest -q   # verify 424+ tests pass
 ```
 
 ## Project Structure
@@ -18,7 +18,7 @@ pulse/
 ├── cli/           # Typer commands and init wizard
 ├── config/        # Settings, pydantic models, profiles
 ├── orchestrator/  # Core loop, error recovery, token budget, sub-agents
-├── llm/           # Provider abstraction (OpenAI-compat, Anthropic, Mock, Async)
+├── llm/           # Provider abstraction (OpenAI-compat, Anthropic, Async)
 ├── memory/        # MEMORY.md/USER.md, FTS5, dialectic profiling
 ├── skills/        # agentskills.io loader, evaluation loop, versioning, curator
 ├── tools/         # Built-in tools, tool registry, shell approval
@@ -33,6 +33,10 @@ pulse/
 ├── observability/ # LangSmith/LangFuse tracing
 ├── storage/       # SQLite + FTS5 engine, optimistic locking
 ├── analytics/     # Usage insights
+├── enterprise/    # Audit logging, RBAC/ABAC, SSO
+├── evolution/     # Self-evolution framework
+├── i18n/          # Internationalization (en/zh)
+├── net.py         # HTTP utilities, JSON parsing
 └── web/           # Flask + React SPA frontend
 ```
 
@@ -45,6 +49,7 @@ pulse/
 - **No new dependencies** without justification. Prefer stdlib.
 - **Secret safety** — never log or persist raw API keys, tokens, or private keys. Use `redact_secrets()`.
 - **Command approval** — any new shell-executing tool must integrate with `pulse/security` approval flow.
+- **Type checking** — run `mypy pulse/ --ignore-missing-imports` before committing.
 
 ## Commit Convention
 
@@ -65,8 +70,9 @@ security: add password redaction pattern
 1. Fork → create a feature branch (`feat/my-feature`)
 2. Write code + tests
 3. Ensure `python -m pytest -q` passes
-4. Ensure `ruff check pulse/ tests/` passes
-5. Open a PR with a clear description
+4. Ensure `ruff check pulse/ tests/ --select E,F,W --ignore E501` passes
+5. Ensure `ruff format --check pulse/ tests/` passes
+6. Open a PR with a clear description
 
 ## Running Tests with Coverage
 
@@ -80,7 +86,7 @@ python -m pytest --cov=pulse --cov-report=term-missing
 1. Subclass `LLMProvider` in `pulse/llm/provider.py`
 2. Implement `chat(messages, tools, tool_choice, **kwargs) -> LLMResponse`
 3. Register in `pulse/llm/config.py`'s `build_router()`
-4. Add tests using `MockProvider` patterns
+4. Add tests using `StubProvider` patterns
 
 ## Adding a New Tool
 
@@ -103,6 +109,7 @@ python -m pytest --cov=pulse --cov-report=term-missing
 - **Secrets**: Never echo raw credentials; always pass through `redact_secrets()`.
 - **Checkpoints**: Use `create_checkpoint()` before destructive file operations.
 - **Blocked commands**: Do not bypass the blocklist (`rm -rf /`, `dd if=/dev/zero of=/dev/sda`).
+- **RBAC**: New features should respect the permission system (`pulse/enterprise/`).
 
 ## Version Policy
 
@@ -112,4 +119,4 @@ Version numbers are aligned across:
 - `README.md` — release badge
 - Git tags — `vX.Y.Z`
 
-When bumping, update ALL four locations. Current version: **0.6.1**.
+When bumping, update ALL four locations. Current version: **0.7.0**.
