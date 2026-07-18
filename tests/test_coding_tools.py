@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
+
+import pytest
+
 from pulse.tools.coding import (
     GitDiffTool,
     GitLogTool,
@@ -12,6 +16,9 @@ from pulse.tools.coding import (
     ReplTool,
     TestRunnerTool,
 )
+
+# Skip lint tests if ruff is not installed
+has_ruff = shutil.which("ruff") is not None
 
 
 class TestGitTools:
@@ -67,6 +74,7 @@ class TestProjectContextTool:
 
 
 class TestLintTool:
+    @pytest.mark.skipif(not has_ruff, reason="ruff not installed")
     def test_lint_clean_file(self, tmp_path):
         f = tmp_path / "clean.py"
         f.write_text("x = 1\n")
@@ -74,6 +82,7 @@ class TestLintTool:
         result = tool.run(str(f))
         assert result.ok
 
+    @pytest.mark.skipif(not has_ruff, reason="ruff not installed")
     def test_lint_dirty_file(self, tmp_path):
         f = tmp_path / "dirty.py"
         f.write_text("import os\nimport sys\nx = 1\n")
