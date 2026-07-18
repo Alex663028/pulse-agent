@@ -1,4 +1,5 @@
 """Resilience primitives: circuit breaker, retry with exponential backoff, async wrapper."""
+
 from __future__ import annotations
 
 import asyncio
@@ -14,13 +15,14 @@ T = TypeVar("T")
 
 
 class CircuitState(enum.Enum):
-    CLOSED = "closed"       # normal operation
-    OPEN = "open"           # failing, reject fast
-    HALF_OPEN = "half_open" # testing if recovered
+    CLOSED = "closed"  # normal operation
+    OPEN = "open"  # failing, reject fast
+    HALF_OPEN = "half_open"  # testing if recovered
 
 
 class CircuitBreakerError(Exception):
     """Raised when the circuit breaker is open."""
+
     pass
 
 
@@ -49,6 +51,7 @@ class CircuitBreaker:
         self._last_failure_time: float = 0.0
         self._lock = asyncio.Lock() if asyncio.get_event_loop().is_running() else None
         import threading
+
         self._thread_lock = threading.Lock()
 
     @property
@@ -112,7 +115,9 @@ class CircuitBreaker:
             if self._failure_count >= self.failure_threshold:
                 self._state = CircuitState.OPEN
                 logger.warning(
-                    "circuit breaker '%s' OPEN after %d failures", self.name, self._failure_count
+                    "circuit breaker '%s' OPEN after %d failures",
+                    self.name,
+                    self._failure_count,
                 )
 
 
@@ -123,6 +128,7 @@ def retry(
     exceptions: tuple[type[Exception], ...] = (Exception,),
 ) -> Callable:
     """Decorator for retry with exponential backoff."""
+
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -133,14 +139,20 @@ def retry(
                 except exceptions as e:
                     last_exc = e
                     if attempt < max_attempts - 1:
-                        wait = delay * (backoff ** attempt)
+                        wait = delay * (backoff**attempt)
                         logger.debug(
                             "retry %s attempt %d/%d in %.1fs: %s",
-                            fn.__name__, attempt + 1, max_attempts, wait, e
+                            fn.__name__,
+                            attempt + 1,
+                            max_attempts,
+                            wait,
+                            e,
                         )
                         time.sleep(wait)
             raise last_exc  # type: ignore[misc]
+
         return wrapper
+
     return decorator
 
 

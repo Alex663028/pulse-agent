@@ -11,6 +11,7 @@ loop locally:
 Every synthesis produces a versioned snapshot (USER.v{n}.md) so the user can
 inspect the reasoning trail and roll back at any time.
 """
+
 from __future__ import annotations
 
 import re
@@ -48,7 +49,7 @@ class DialecticEngine:
         profile = self.memory.read_user()
         sessions = self._recent_sessions(limit=20)
         evidence = "\n\n".join(
-            f"[session {s.get('id','?')[:12]}] {s.get('summary','')[:200]}"
+            f"[session {s.get('id', '?')[:12]}] {s.get('summary', '')[:200]}"
             for s in sessions
             if s.get("summary")
         )[:2000]
@@ -56,7 +57,7 @@ class DialecticEngine:
             return profile  # nothing to reflect on
         profile_budget = max_input_tokens - len(evidence) // 4
         if len(profile) > profile_budget * 4:
-            profile = profile[:profile_budget * 4]
+            profile = profile[: profile_budget * 4]
 
         try:
             resp = self.llm.chat(
@@ -81,7 +82,8 @@ class DialecticEngine:
     def _commit(self, old: str, new: str) -> None:
         # snapshot current version
         versions = sorted(
-            p for p in self._version_dir.glob("USER.v*.md")
+            p
+            for p in self._version_dir.glob("USER.v*.md")
             if re.match(r"USER\.v\d+\.md", p.name)
         )
         n = len(versions) + 1
@@ -96,9 +98,11 @@ class DialecticEngine:
             key=lambda p: p.stat().st_mtime,
         )
         return [
-            {"version": int(re.search(r"USER\.v(\d+)\.md", v.name).group(1)),
-             "path": str(v),
-             "size": v.stat().st_size}
+            {
+                "version": int(re.search(r"USER\.v(\d+)\.md", v.name).group(1)),
+                "path": str(v),
+                "size": v.stat().st_size,
+            }
             for v in versions
         ]
 
@@ -110,8 +114,17 @@ class DialecticEngine:
         )
         if not versions:
             return None
-        target = versions[-1] if version is None else next(
-            (v for v in versions if int(re.search(r"USER\.v(\d+)\.md", v.name).group(1)) == version), versions[-1]
+        target = (
+            versions[-1]
+            if version is None
+            else next(
+                (
+                    v
+                    for v in versions
+                    if int(re.search(r"USER\.v(\d+)\.md", v.name).group(1)) == version
+                ),
+                versions[-1],
+            )
         )
         old = self.memory.read_user()
         restored = target.read_text(encoding="utf-8")
@@ -124,6 +137,7 @@ class DialecticEngine:
     def _recent_sessions(self, limit: int) -> list[dict]:
         """Return recent session summaries."""
         rows = self.storage._conn.execute(
-            "SELECT id, summary FROM sessions ORDER BY created_at DESC LIMIT ?", (limit,)
+            "SELECT id, summary FROM sessions ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
         return [dict(r) for r in rows]

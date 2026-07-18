@@ -3,6 +3,7 @@
 ``pulse health --port 8080`` starts a tiny HTTP server that returns 200
 when Pulse is running (storage accessible, router reachable).
 """
+
 from __future__ import annotations
 
 import json

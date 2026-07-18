@@ -3,6 +3,7 @@
 This module provides the tools a self-improving agent actually needs to be useful:
 web search, web fetch, code execution, HTTP requests, and file editing.
 """
+
 from __future__ import annotations
 
 import ast
@@ -24,7 +25,10 @@ class WebSearchTool(Tool):
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "Search query string"},
-            "max_results": {"type": "integer", "description": "Maximum number of results (default 5, max 10)"},
+            "max_results": {
+                "type": "integer",
+                "description": "Maximum number of results (default 5, max 10)",
+            },
         },
         "required": ["query"],
     }
@@ -44,9 +48,17 @@ class WebSearchTool(Tool):
                         href_start = part.index('href="') + 6
                         href_end = part.index('"', href_start)
                         href = part[href_start:href_end]
-                        text_start = part.index('</a>') + 4
-                        _ = part.index('</a>', text_start) if '</a>' in part[text_start:] else text_start + 200
-                        text = part[text_start:].split("</a>")[0] if "</a>" in part[text_start:] else ""
+                        text_start = part.index("</a>") + 4
+                        _ = (
+                            part.index("</a>", text_start)
+                            if "</a>" in part[text_start:]
+                            else text_start + 200
+                        )
+                        text = (
+                            part[text_start:].split("</a>")[0]
+                            if "</a>" in part[text_start:]
+                            else ""
+                        )
                         text = text.strip()
                         if href and text:
                             results.append(f"Title: {text[:100]}\nURL: {href}")
@@ -79,7 +91,10 @@ class WebFetchTool(Tool):
         "type": "object",
         "properties": {
             "url": {"type": "string", "description": "HTTP or HTTPS URL to fetch"},
-            "max_chars": {"type": "integer", "description": "Maximum characters to return (default 5000)"},
+            "max_chars": {
+                "type": "integer",
+                "description": "Maximum characters to return (default 5000)",
+            },
         },
         "required": ["url"],
     }
@@ -93,8 +108,16 @@ class WebFetchTool(Tool):
                 raw = resp.read().decode("utf-8", errors="replace")
                 # Remove scripts, styles
                 import re
-                raw = re.sub(r"<script[^>]*>.*?</script>", "", raw, flags=re.DOTALL | re.IGNORECASE)
-                raw = re.sub(r"<style[^>]*>.*?</style>", "", raw, flags=re.DOTALL | re.IGNORECASE)
+
+                raw = re.sub(
+                    r"<script[^>]*>.*?</script>",
+                    "",
+                    raw,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+                raw = re.sub(
+                    r"<style[^>]*>.*?</style>", "", raw, flags=re.DOTALL | re.IGNORECASE
+                )
                 text = re.sub(r"<[^>]+>", " ", raw)
                 text = re.sub(r"\s+", " ", text).strip()
                 if not text:
@@ -131,6 +154,7 @@ class WriteFileTool(Tool):
             if p.exists():
                 try:
                     from pulse.security import create_checkpoint
+
                     create_checkpoint(p, label="write_file")
                 except Exception:
                     pass
@@ -156,7 +180,9 @@ class EditFileTool(Tool):
         "required": ["path", "old_string", "new_string"],
     }
 
-    def run(self, path: str = "", old_string: str = "", new_string: str = "", **kwargs: Any) -> ToolResult:
+    def run(
+        self, path: str = "", old_string: str = "", new_string: str = "", **kwargs: Any
+    ) -> ToolResult:
         """Replace ``old_string`` with ``new_string`` in file ``path``.
 
         Automatically creates a checkpoint snapshot before modification.
@@ -171,6 +197,7 @@ class EditFileTool(Tool):
             # Create checkpoint before modification
             try:
                 from pulse.security import create_checkpoint
+
                 create_checkpoint(p, label="edit_file")
             except Exception:
                 pass  # checkpoint failure should not block the edit
@@ -191,7 +218,10 @@ class PythonExecTool(Tool):
         "type": "object",
         "properties": {
             "code": {"type": "string", "description": "Python code to execute"},
-            "timeout": {"type": "integer", "description": "Max execution seconds (default 5, max 30)"},
+            "timeout": {
+                "type": "integer",
+                "description": "Max execution seconds (default 5, max 30)",
+            },
         },
         "required": ["code"],
     }
@@ -211,7 +241,9 @@ class PythonExecTool(Tool):
                 text=True,
                 timeout=timeout,
             )
-            output = result.stdout.strip() + (f"\n[stderr] {result.stderr.strip()}" if result.stderr.strip() else "")
+            output = result.stdout.strip() + (
+                f"\n[stderr] {result.stderr.strip()}" if result.stderr.strip() else ""
+            )
             if result.returncode != 0:
                 return ToolResult(ok=False, error=f"exit {result.returncode}: {output}")
             return ToolResult(ok=True, output="(no output)" if not output else output)
@@ -238,7 +270,10 @@ class ShellExecTool(Tool):
         "type": "object",
         "properties": {
             "command": {"type": "string", "description": "Shell command to execute"},
-            "timeout": {"type": "integer", "description": "Max execution seconds (default 10, max 60)"},
+            "timeout": {
+                "type": "integer",
+                "description": "Max execution seconds (default 10, max 60)",
+            },
         },
         "required": ["command"],
     }
@@ -248,7 +283,12 @@ class ShellExecTool(Tool):
 
         Applies secret redaction and command approval when configured.
         """
-        from pulse.security import redact_secrets, requires_approval, is_blocked, ApprovalMode
+        from pulse.security import (
+            redact_secrets,
+            requires_approval,
+            is_blocked,
+            ApprovalMode,
+        )
 
         if not command or not command.strip():
             return ToolResult(ok=False, error="empty command")
@@ -262,9 +302,14 @@ class ShellExecTool(Tool):
         # Also check settings-level approval mode
         if mode == ApprovalMode.OFF:
             from pulse.config.settings import load_settings
+
             try:
                 _s = load_settings()
-                _mode_map = {"off": ApprovalMode.OFF, "manual": ApprovalMode.MANUAL, "smart": ApprovalMode.SMART}
+                _mode_map = {
+                    "off": ApprovalMode.OFF,
+                    "manual": ApprovalMode.MANUAL,
+                    "smart": ApprovalMode.SMART,
+                }
                 mode = _mode_map.get(_s.approval_mode, ApprovalMode.OFF)
             except Exception:
                 pass
@@ -284,7 +329,9 @@ class ShellExecTool(Tool):
                 text=True,
                 timeout=timeout,
             )
-            output = result.stdout.strip() + (f"\n[stderr] {result.stderr.strip()}" if result.stderr.strip() else "")
+            output = result.stdout.strip() + (
+                f"\n[stderr] {result.stderr.strip()}" if result.stderr.strip() else ""
+            )
             # Redact secrets from output
             output = redact_secrets(output, enabled=True)
             if result.returncode != 0:
@@ -306,10 +353,16 @@ class HttpClientTool(Tool):
         "type": "object",
         "properties": {
             "url": {"type": "string", "description": "HTTP/HTTPS URL"},
-            "method": {"type": "string", "description": "HTTP method: GET, POST, PUT, DELETE (default GET)"},
+            "method": {
+                "type": "string",
+                "description": "HTTP method: GET, POST, PUT, DELETE (default GET)",
+            },
             "headers": {"type": "object", "description": "Request headers as dict"},
             "body": {"type": "string", "description": "Request body (POST/PUT)"},
-            "timeout": {"type": "integer", "description": "Timeout seconds (default 15)"},
+            "timeout": {
+                "type": "integer",
+                "description": "Timeout seconds (default 15)",
+            },
         },
         "required": ["url"],
     }

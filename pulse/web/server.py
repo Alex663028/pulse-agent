@@ -1,4 +1,5 @@
 """Web UI — Flask-based session management dashboard on port 10000."""
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,9 @@ DEFAULT_PORT = 10000
 try:
     from flask import Flask, render_template_string, request, jsonify, redirect, url_for
 except ImportError as exc:
-    raise DependencyError("Flask not installed. Install with: pip install flask") from exc
+    raise DependencyError(
+        "Flask not installed. Install with: pip install flask"
+    ) from exc
 
 from pulse.cli.runtime import Runtime, bootstrap  # noqa: E402
 
@@ -237,6 +240,7 @@ SETTINGS_TEMPLATE = """
 
 # ---- App factory ----
 
+
 class PulseWebUI:
     """Encapsulate the Flask dashboard, routes, and in-memory session state."""
 
@@ -303,10 +307,24 @@ class PulseWebUI:
         app.add_url_rule("/chat/<session_id>", "chat", self._route_chat)
         app.add_url_rule("/tools", "tools", self._route_tools)
         app.add_url_rule("/settings", "settings", self._route_settings)
-        app.add_url_rule("/api/sessions", "api_create_session", self._route_api_create_session, methods=["POST"])
-        app.add_url_rule("/api/sessions/<session_id>/delete", "api_delete_session", self._route_api_delete_session, methods=["POST"])
-        app.add_url_rule("/api/chat", "api_chat", self._route_api_chat, methods=["POST"])
-        app.add_url_rule("/api/tools", "api_tools", self._route_api_tools, methods=["GET"])
+        app.add_url_rule(
+            "/api/sessions",
+            "api_create_session",
+            self._route_api_create_session,
+            methods=["POST"],
+        )
+        app.add_url_rule(
+            "/api/sessions/<session_id>/delete",
+            "api_delete_session",
+            self._route_api_delete_session,
+            methods=["POST"],
+        )
+        app.add_url_rule(
+            "/api/chat", "api_chat", self._route_api_chat, methods=["POST"]
+        )
+        app.add_url_rule(
+            "/api/tools", "api_tools", self._route_api_tools, methods=["GET"]
+        )
 
     def _route_index(self):
         return self._render(

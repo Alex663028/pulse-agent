@@ -1,4 +1,5 @@
 """Tests for health check endpoint and social gateway webhook handling."""
+
 from __future__ import annotations
 
 import json
@@ -26,6 +27,7 @@ def _start_server():
 def test_health_returns_200_and_status_json():
     """Health endpoint returns 200 with a JSON status body."""
     from pulse.cli import health
+
     orig_cache = health._runtime_cache
     health._runtime_cache = None
     try:
@@ -36,6 +38,7 @@ def test_health_returns_200_and_status_json():
         health._runtime_cache = mock_rt
 
         from http.server import HTTPServer
+
         server = HTTPServer(("127.0.0.1", 0), health.HealthHandler)
         port = server.server_address[1]
         t = threading.Thread(target=server.serve_forever, daemon=True)
@@ -58,12 +61,14 @@ def test_health_returns_200_and_status_json():
 def test_health_404_for_unknown_path():
     """Health endpoint returns 404 for non-root paths."""
     from pulse.cli import health
+
     orig_cache = health._runtime_cache
     health._runtime_cache = None
     try:
         mock_rt = MagicMock()
         health._runtime_cache = mock_rt
         from http.server import HTTPServer
+
         server = HTTPServer(("127.0.0.1", 0), health.HealthHandler)
         port = server.server_address[1]
         t = threading.Thread(target=server.serve_forever, daemon=True)
@@ -82,6 +87,7 @@ def test_health_404_for_unknown_path():
 def test_health_caches_runtime():
     """Health endpoint caches the Runtime across requests."""
     from pulse.cli import health
+
     orig_cache = health._runtime_cache
     health._runtime_cache = None
     try:
@@ -92,6 +98,7 @@ def test_health_caches_runtime():
         # Bootstrap should be called once (on first request)
         with patch.object(health, "bootstrap", return_value=mock_rt) as mock_boot:
             from http.server import HTTPServer
+
             server = HTTPServer(("127.0.0.1", 0), health.HealthHandler)
             port = server.server_address[1]
             t = threading.Thread(target=server.serve_forever, daemon=True)
@@ -112,11 +119,13 @@ def test_health_caches_runtime():
 def test_health_returns_503_on_error():
     """Health endpoint returns 503 when bootstrap raises."""
     from pulse.cli import health
+
     orig_cache = health._runtime_cache
     health._runtime_cache = None
     try:
         with patch.object(health, "bootstrap", side_effect=Exception("db fail")):
             from http.server import HTTPServer
+
             server = HTTPServer(("127.0.0.1", 0), health.HealthHandler)
             port = server.server_address[1]
             t = threading.Thread(target=server.serve_forever, daemon=True)
@@ -139,9 +148,11 @@ def test_health_returns_503_on_error():
 # social.py webhook tests
 # ──────────────────────────────────────────────────────────────────────
 
+
 def test_safe_webhook_text_strips_control_chars():
     """_safe_webhook_text strips non-printable control characters."""
     from pulse.gateways.social import _safe_webhook_text
+
     result = _safe_webhook_text("hello\x00world\x07foo")
     assert result == "helloworldfoo"
 
@@ -149,6 +160,7 @@ def test_safe_webhook_text_strips_control_chars():
 def test_safe_webhook_text_limits_length():
     """_safe_webhook_text enforces max_length."""
     from pulse.gateways.social import _safe_webhook_text
+
     result = _safe_webhook_text("a" * 10000)
     assert len(result) == 4096
 
@@ -156,12 +168,14 @@ def test_safe_webhook_text_limits_length():
 def test_safe_webhook_text_empty_input():
     """_safe_webhook_text handles empty input."""
     from pulse.gateways.social import _safe_webhook_text
+
     assert _safe_webhook_text("") == ""
 
 
 def test_safe_webhook_text_preserves_unicode():
     """_safe_webhook_text preserves normal unicode."""
     from pulse.gateways.social import _safe_webhook_text
+
     result = _safe_webhook_text("hello world 你好")
     assert result == "hello world 你好"
 
@@ -169,5 +183,6 @@ def test_safe_webhook_text_preserves_unicode():
 def test_social_gateway_audit_logger_exists():
     """SocialGateway should have an audit logger configured."""
     from pulse.gateways.social import _audit_webhook
+
     # Just verify function is callable
     assert callable(_audit_webhook)

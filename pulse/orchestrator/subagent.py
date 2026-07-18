@@ -9,6 +9,7 @@ Adopts the agent-team-orchestration pattern:
 Recursive mode: sub-agents can run a full Orchestrator loop (with recovery,
 budget, skill selection) for more capable multi-step executions.
 """
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -17,7 +18,13 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from pulse.llm.provider import AnthropicError, LLMError, LLMMessage, LLMProvider, LLMResponse
+from pulse.llm.provider import (
+    AnthropicError,
+    LLMError,
+    LLMMessage,
+    LLMProvider,
+    LLMResponse,
+)
 from pulse.tools.registry import ToolRegistry
 
 
@@ -48,6 +55,7 @@ class SubagentResult:
 @dataclass
 class RecursionContext:
     """Controls recursive sub-agent behavior. None = legacy single-shot; set for full loop."""
+
     router: LLMProvider = None
     tools: ToolRegistry = None
     max_iterations: int = 5
@@ -83,9 +91,13 @@ class SubagentPool:
                 try:
                     results.append(fut.result(timeout=task.timeout + 5))
                 except concurrent.futures.TimeoutError:
-                    results.append(SubagentResult(task_id=task.id, success=False, error="timeout"))
+                    results.append(
+                        SubagentResult(task_id=task.id, success=False, error="timeout")
+                    )
                 except Exception as e:  # noqa: BLE001
-                    results.append(SubagentResult(task_id=task.id, success=False, error=str(e)))
+                    results.append(
+                        SubagentResult(task_id=task.id, success=False, error=str(e))
+                    )
         return results
 
     @staticmethod
@@ -104,10 +116,12 @@ class SubagentPool:
         t0 = time.time()
 
         # --- Recursive (full Orchestrator-like) mode ---
-        if recursive is not None and recursive.router is not None and recursive.tools is not None:
-            return SubagentPool._exec_recursive(
-                task, primary, tools, recursive, t0
-            )
+        if (
+            recursive is not None
+            and recursive.router is not None
+            and recursive.tools is not None
+        ):
+            return SubagentPool._exec_recursive(task, primary, tools, recursive, t0)
 
         # --- Legacy single-shot + tool loop mode ---
         return SubagentPool._exec_legacy(task, primary, tools, t0)
@@ -146,9 +160,7 @@ class SubagentPool:
                                 messages, tools=tool_schemas or None
                             )
                         else:
-                            resp = primary.chat(
-                                messages, tools=tool_schemas or None
-                            )
+                            resp = primary.chat(messages, tools=tool_schemas or None)
                         break
                     except (LLMError, AnthropicError):
                         if retry == 0:
@@ -177,16 +189,24 @@ class SubagentPool:
                     )
 
                 messages.append(
-                    LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls)
+                    LLMMessage(
+                        role="assistant",
+                        content=resp.content,
+                        tool_calls=resp.tool_calls,
+                    )
                 )
                 for tc in resp.tool_calls:
                     tool_result = (
                         recursive.tools.call(tc.name, tc.arguments)
-                        if recursive.tools else None
+                        if recursive.tools
+                        else None
                     )
                     output = (
-                        tool_result.output if tool_result and tool_result.ok
-                        else (tool_result.error if tool_result else "no tools available")
+                        tool_result.output
+                        if tool_result and tool_result.ok
+                        else (
+                            tool_result.error if tool_result else "no tools available"
+                        )
                     )
                     messages.append(
                         LLMMessage(
@@ -246,13 +266,20 @@ class SubagentPool:
                         elapsed=time.time() - t0,
                     )
                 messages.append(
-                    LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls)
+                    LLMMessage(
+                        role="assistant",
+                        content=resp.content,
+                        tool_calls=resp.tool_calls,
+                    )
                 )
                 for tc in resp.tool_calls:
                     tool_result = tools.call(tc.name, tc.arguments) if tools else None
                     output = (
-                        tool_result.output if tool_result and tool_result.ok
-                        else (tool_result.error if tool_result else "no tools available")
+                        tool_result.output
+                        if tool_result and tool_result.ok
+                        else (
+                            tool_result.error if tool_result else "no tools available"
+                        )
                     )
                     messages.append(
                         LLMMessage(
@@ -300,20 +327,26 @@ def decompose(task: str, llm: Optional[LLMProvider] = None) -> list[str]:
                     LLMMessage(role="user", content=task),
                 ]
             )
-            parts = [ln.strip("- ").strip() for ln in resp.content.split("\n") if ln.strip().startswith("-")]
+            parts = [
+                ln.strip("- ").strip()
+                for ln in resp.content.split("\n")
+                if ln.strip().startswith("-")
+            ]
             if len(parts) >= 2:
                 return parts[:5]
         except (RuntimeError, OSError, IndexError, LLMError, AnthropicError):
             pass
     # Heuristic fallback: split on bullet points or numbered items in the original task
-    parts = [ln.strip("- ").strip() for ln in task.split("\n") if ln.strip().startswith("-")]
+    parts = [
+        ln.strip("- ").strip() for ln in task.split("\n") if ln.strip().startswith("-")
+    ]
     if len(parts) >= 2:
         return parts[:5]
     # Try numbered list pattern: "1. ... 2. ... 3. ..."
     numbered = re.split(r"\d+\.\s+", task)
     numbered = [p.strip() for p in numbered if p.strip()]
     if len(numbered) >= 2:
-        return [f"Step {i+1}: {p}" for i, p in enumerate(numbered)][:5]
+        return [f"Step {i + 1}: {p}" for i, p in enumerate(numbered)][:5]
     # Try comma/and split: "collect data, analyze trends, and write report"
     for sep in (", and ", ", ", " and ", " then "):
         parts = [p.strip() for p in task.split(sep) if p.strip()]
@@ -337,7 +370,9 @@ def merge_results(task: str, results: list[SubagentResult], llm: LLMProvider) ->
     parts = []
     for i, r in enumerate(results):
         tag = "✓" if r.success else "✗"
-        parts.append(f"### sub-task {i+1} [{tag}]\n{r.answer or r.error or '(empty)'}")
+        parts.append(
+            f"### sub-task {i + 1} [{tag}]\n{r.answer or r.error or '(empty)'}"
+        )
     merged = "\n\n".join(parts)
     if llm is None or len(merged) < 200:
         return merged
@@ -345,7 +380,9 @@ def merge_results(task: str, results: list[SubagentResult], llm: LLMProvider) ->
         resp = llm.chat(
             [
                 LLMMessage(role="system", content=MERGE_SYSTEM),
-                LLMMessage(role="user", content=f"ORIGINAL: {task}\n\nSUB-RESULTS:\n{merged}"),
+                LLMMessage(
+                    role="user", content=f"ORIGINAL: {task}\n\nSUB-RESULTS:\n{merged}"
+                ),
             ],
             max_tokens=2000,
         )

@@ -3,6 +3,7 @@
 Prevents burst traffic that triggers 429s.  Each provider can have its own
 bucket; if no bucket is configured a global default is used.
 """
+
 from __future__ import annotations
 
 import threading
@@ -31,7 +32,9 @@ class TokenBucket:
         """Block until ``tokens`` are available, then consume them."""
         with self._lock:
             now = time.time()
-            self._tokens = min(self.capacity, self._tokens + (now - self._last) * self.rate)
+            self._tokens = min(
+                self.capacity, self._tokens + (now - self._last) * self.rate
+            )
             self._last = now
 
             if self._tokens >= tokens:
@@ -49,7 +52,9 @@ class TokenBucket:
         # Replenish and consume after wait
         with self._lock:
             now = time.time()
-            self._tokens = min(self.capacity, self._tokens + (now - self._last) * self.rate)
+            self._tokens = min(
+                self.capacity, self._tokens + (now - self._last) * self.rate
+            )
             self._last = now
             self._tokens -= tokens
 

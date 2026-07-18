@@ -4,6 +4,7 @@ This is the self-hosted replacement for Hermes' Honcho-backed memory: notes and
 user profile live as plain Markdown files (portable, diffable, private) and are
 additionally indexed in local SQLite FTS5 for cross-session recall.
 """
+
 from __future__ import annotations
 
 import threading

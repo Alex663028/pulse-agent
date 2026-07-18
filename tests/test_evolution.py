@@ -1,7 +1,13 @@
 """Tests for the self-evolution framework."""
+
 from __future__ import annotations
 
-from pulse.evolution import EvolutionAnalyzer, EvolutionEngine, EvolutionProposal, EvolutionSignal
+from pulse.evolution import (
+    EvolutionAnalyzer,
+    EvolutionEngine,
+    EvolutionProposal,
+    EvolutionSignal,
+)
 
 
 class TestEvolutionSignal:
@@ -38,13 +44,22 @@ class TestEvolutionAnalyzer:
         # Log multiple failures with calc tool
         for i in range(5):
             storage.log_trajectory(
-                tid=f"t{i}", session_id=f"s{i}", outcome=False,
-                used_skills=[], data={"trajectory": [{"action": "tool:calc", "outcome": False, "detail": "error"}]}
+                tid=f"t{i}",
+                session_id=f"s{i}",
+                outcome=False,
+                used_skills=[],
+                data={
+                    "trajectory": [
+                        {"action": "tool:calc", "outcome": False, "detail": "error"}
+                    ]
+                },
             )
 
         analyzer = EvolutionAnalyzer(storage, registry)
         signals = analyzer.analyze()
-        assert any(s.kind == "repeated_failure" and s.source == "tool:calc" for s in signals)
+        assert any(
+            s.kind == "repeated_failure" and s.source == "tool:calc" for s in signals
+        )
 
     def test_detects_skill_gap(self, tmp_path):
         from pulse.config.settings import Settings
@@ -58,8 +73,11 @@ class TestEvolutionAnalyzer:
         # Log multiple successful trajectories with same task prefix
         for i in range(7):
             storage.log_trajectory(
-                tid=f"t{i}", session_id=f"s{i}", outcome=True,
-                used_skills=[], data={"task": "quarterly report summary and analysis"}
+                tid=f"t{i}",
+                session_id=f"s{i}",
+                outcome=True,
+                used_skills=[],
+                data={"task": "quarterly report summary and analysis"},
             )
 
         analyzer = EvolutionAnalyzer(storage, registry)
@@ -80,8 +98,19 @@ class TestEvolutionEngine:
         # Log failures to trigger proposal
         for i in range(5):
             storage.log_trajectory(
-                tid=f"t{i}", session_id=f"s{i}", outcome=False,
-                used_skills=[], data={"trajectory": [{"action": "tool:web_search", "outcome": False, "detail": "timeout"}]}
+                tid=f"t{i}",
+                session_id=f"s{i}",
+                outcome=False,
+                used_skills=[],
+                data={
+                    "trajectory": [
+                        {
+                            "action": "tool:web_search",
+                            "outcome": False,
+                            "detail": "timeout",
+                        }
+                    ]
+                },
             )
 
         analyzer = EvolutionAnalyzer(storage, registry)
@@ -93,6 +122,7 @@ class TestEvolutionEngine:
 
     def test_apply_add_skill_proposal(self, tmp_path):
         from unittest.mock import MagicMock
+
         analyzer = EvolutionAnalyzer(MagicMock(), MagicMock())
         engine = EvolutionEngine(analyzer, tmp_path / "skills")
 

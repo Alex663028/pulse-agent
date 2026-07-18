@@ -1,4 +1,5 @@
 """Tests for memory: FTS5 cross-session recall + user-profile extraction."""
+
 from __future__ import annotations
 
 from pathlib import Path

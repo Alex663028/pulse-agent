@@ -1,4 +1,5 @@
 """Storage with optimistic locking support."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -8,6 +9,7 @@ from pulse.storage.engine import Storage
 
 class OptimisticLockError(Exception):
     """Raised when a concurrent modification is detected."""
+
     pass
 
 

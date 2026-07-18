@@ -25,7 +25,9 @@ def cmd_list(settings) -> None:
     servers = settings.mcp_servers
     if not servers:
         console.print("[yellow]No MCP servers configured.[/yellow]")
-        console.print('Add one with: [bold]pulse mcp add <name> "npx -y <pkg> <args...>"[/bold]')
+        console.print(
+            'Add one with: [bold]pulse mcp add <name> "npx -y <pkg> <args...>"[/bold]'
+        )
         return
     table = Table(title="MCP Servers")
     table.add_column("Name", style="cyan")
@@ -43,9 +45,23 @@ def cmd_list(settings) -> None:
         except Exception as e:  # noqa: BLE001
             ok, n, detail = False, 0, str(e)
         if ok:
-            table.add_row(s.name, s.command, " ".join(s.args), "yes", str(n), f"[green]ok ({n} tool(s))[/green]")
+            table.add_row(
+                s.name,
+                s.command,
+                " ".join(s.args),
+                "yes",
+                str(n),
+                f"[green]ok ({n} tool(s))[/green]",
+            )
         else:
-            table.add_row(s.name, s.command, " ".join(s.args), "yes", "?", f"[red]unreachable: {detail}[/red]")
+            table.add_row(
+                s.name,
+                s.command,
+                " ".join(s.args),
+                "yes",
+                "?",
+                f"[red]unreachable: {detail}[/red]",
+            )
     console.print(table)
 
 
@@ -57,7 +73,9 @@ def cmd_add(settings, name: str, command: str, args: list[str]) -> None:
     cfg = MCPServerConfig(name=name, command=command, args=list(args), enabled=True)
     settings.mcp_servers.append(cfg)
     save_settings(settings)
-    console.print(f"[green]✓ Added MCP server[/green] '{name}' → {command} {' '.join(args)}")
+    console.print(
+        f"[green]✓ Added MCP server[/green] '{name}' → {command} {' '.join(args)}"
+    )
 
 
 def cmd_remove(settings, name: str) -> None:
@@ -75,12 +93,18 @@ def cmd_test(settings, name: str | None = None) -> None:
     """Attempt to connect to (a) server(s) and list their tools."""
     from pulse.mcp import MCPClient, MCPError
 
-    targets = [s for s in settings.mcp_servers if s.enabled and (name is None or s.name == name)]
+    targets = [
+        s
+        for s in settings.mcp_servers
+        if s.enabled and (name is None or s.name == name)
+    ]
     if not targets:
         console.print("[yellow]No matching enabled MCP servers.[/yellow]")
         return
     for s in targets:
-        console.print(f"[bold cyan]{s.name}[/bold cyan] ({s.command} {' '.join(s.args)})")
+        console.print(
+            f"[bold cyan]{s.name}[/bold cyan] ({s.command} {' '.join(s.args)})"
+        )
         try:
             with MCPClient(command=s.command, args=list(s.args)) as client:
                 specs = client.list_tools()
@@ -88,7 +112,9 @@ def cmd_test(settings, name: str | None = None) -> None:
                     console.print("  [dim]no tools exposed[/dim]")
                     continue
                 for spec in specs:
-                    console.print(f"  • [green]{spec.get('name')}[/green]: {spec.get('description', '')[:60]}")
+                    console.print(
+                        f"  • [green]{spec.get('name')}[/green]: {spec.get('description', '')[:60]}"
+                    )
         except MCPError as e:
             console.print(f"  [red]connection failed:[/red] {e}")
         except Exception as e:  # noqa: BLE001

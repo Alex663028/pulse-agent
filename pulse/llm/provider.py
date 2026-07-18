@@ -6,6 +6,7 @@ proxy) speak the OpenAI ``/v1/chat/completions`` protocol, so a single
 DeepSeek, GLM, …) are the same protocol with an API key. Anthropic uses its
 own SDK and is added as a sibling provider.
 """
+
 from __future__ import annotations
 
 import json
@@ -44,7 +45,10 @@ class LLMMessage:
                 {
                     "id": tc.id,
                     "type": "function",
-                    "function": {"name": tc.name, "arguments": json.dumps(tc.arguments, ensure_ascii=False)},
+                    "function": {
+                        "name": tc.name,
+                        "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                    },
                 }
                 for tc in self.tool_calls
             ]
@@ -128,7 +132,9 @@ class OpenAICompatProvider(LLMProvider):
 
     name = "openai-compat"
 
-    def __init__(self, base_url: str, api_key: str = "", model: str = "", timeout: float = 120.0):
+    def __init__(
+        self, base_url: str, api_key: str = "", model: str = "", timeout: float = 120.0
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
@@ -170,7 +176,9 @@ class OpenAICompatProvider(LLMProvider):
             if self._client is None:
                 from openai import OpenAI
 
-                self._client = OpenAI(base_url=self.base_url, api_key=self.api_key, timeout=self.timeout)
+                self._client = OpenAI(
+                    base_url=self.base_url, api_key=self.api_key, timeout=self.timeout
+                )
             return self._client.chat.completions.create(**payload)
         except Exception as e:
             raise LLMError(f"openai-compat request failed: {e}") from e
@@ -219,7 +227,9 @@ class OpenAICompatProvider(LLMProvider):
             if self._client is None:
                 from openai import OpenAI
 
-                self._client = OpenAI(base_url=self.base_url, api_key=self.api_key, timeout=self.timeout)
+                self._client = OpenAI(
+                    base_url=self.base_url, api_key=self.api_key, timeout=self.timeout
+                )
             stream = self._client.chat.completions.create(**payload)
             full_content = ""
             for chunk in stream:
@@ -235,7 +245,11 @@ class OpenAICompatProvider(LLMProvider):
                         except json.JSONDecodeError:
                             args = {}
                         yield LLMResponse(
-                            tool_calls=[ToolCall(id=tc.id, name=tc.function.name, arguments=args)],
+                            tool_calls=[
+                                ToolCall(
+                                    id=tc.id, name=tc.function.name, arguments=args
+                                )
+                            ],
                         )
         except Exception:
             # fall back to non-streaming
@@ -267,7 +281,10 @@ class AnthropicProvider(LLMProvider):
         if self._client is None:
             try:
                 import anthropic  # noqa: F811
-                self._client = anthropic.Anthropic(base_url=self.base_url, api_key=self.api_key)
+
+                self._client = anthropic.Anthropic(
+                    base_url=self.base_url, api_key=self.api_key
+                )
             except ImportError:
                 self._client = "import_error"
 
@@ -280,14 +297,18 @@ class AnthropicProvider(LLMProvider):
     ) -> LLMResponse:
         self._ensure_client()
         if self._client == "import_error":
-            raise LLMError("anthropic package not installed; pip install anthropic>=0.25")
+            raise LLMError(
+                "anthropic package not installed; pip install anthropic>=0.25"
+            )
         if self._client is None:
             raise LLMError("Anthropic client not initialized")
 
         system = self._extract_system(messages)
         anthropic_tools = self._convert_tools(tools)
         conversation = self._convert_messages(messages)
-        return self._invoke(system, conversation, anthropic_tools, tool_choice, **kwargs)
+        return self._invoke(
+            system, conversation, anthropic_tools, tool_choice, **kwargs
+        )
 
     def _extract_system(self, messages: list[LLMMessage]) -> str:
         system = ""
@@ -304,11 +325,13 @@ class AnthropicProvider(LLMProvider):
         for tool_def in tools:
             fn = tool_def.get("function", tool_def)
             param_schema = fn.get("parameters", {"type": "object", "properties": {}})
-            out.append({
-                "name": fn.get("name", ""),
-                "description": fn.get("description", ""),
-                "input_schema": param_schema,
-            })
+            out.append(
+                {
+                    "name": fn.get("name", ""),
+                    "description": fn.get("description", ""),
+                    "input_schema": param_schema,
+                }
+            )
         return out
 
     @staticmethod
@@ -320,31 +343,39 @@ class AnthropicProvider(LLMProvider):
             elif m.role == "assistant":
                 if m.tool_calls:
                     for tc in m.tool_calls:
-                        conversation.append({
-                            "role": "assistant",
-                            "content": [
-                                {"type": "text", "text": m.content} if m.content else {"type": "text", "text": ""},
-                                {
-                                    "type": "tool_use",
-                                    "id": tc.id,
-                                    "name": tc.name,
-                                    "input": tc.arguments,
-                                },
-                            ],
-                        })
+                        conversation.append(
+                            {
+                                "role": "assistant",
+                                "content": [
+                                    {"type": "text", "text": m.content}
+                                    if m.content
+                                    else {"type": "text", "text": ""},
+                                    {
+                                        "type": "tool_use",
+                                        "id": tc.id,
+                                        "name": tc.name,
+                                        "input": tc.arguments,
+                                    },
+                                ],
+                            }
+                        )
                 else:
-                    conversation.append({"role": "assistant", "content": m.content or ""})
+                    conversation.append(
+                        {"role": "assistant", "content": m.content or ""}
+                    )
             elif m.role == "tool":
-                conversation.append({
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": m.tool_call_id or "",
-                            "content": m.content or "",
-                        }
-                    ],
-                })
+                conversation.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": m.tool_call_id or "",
+                                "content": m.content or "",
+                            }
+                        ],
+                    }
+                )
         return conversation
 
     def _invoke(
@@ -362,8 +393,10 @@ class AnthropicProvider(LLMProvider):
                 kwargs["tools"] = anthropic_tools
             if tool_choice:
                 kwargs["tool_choice"] = (
-                    {"type": "auto"} if tool_choice == "auto"
-                    else {"type": "tool", "name": tool_choice} if tool_choice == "tool"
+                    {"type": "auto"}
+                    if tool_choice == "auto"
+                    else {"type": "tool", "name": tool_choice}
+                    if tool_choice == "tool"
                     else tool_choice
                 )
 
@@ -385,7 +418,9 @@ class AnthropicProvider(LLMProvider):
             if block.type == "text":
                 content += block.text
             elif block.type == "tool_use":
-                tool_calls.append(ToolCall(id=block.id, name=block.name, arguments=block.input))
+                tool_calls.append(
+                    ToolCall(id=block.id, name=block.name, arguments=block.input)
+                )
         usage = Usage(
             prompt_tokens=getattr(resp.usage, "input_tokens", 0) or 0,
             completion_tokens=getattr(resp.usage, "output_tokens", 0) or 0,

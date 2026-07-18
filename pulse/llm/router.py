@@ -1,4 +1,5 @@
 """Provider router with a fallback chain, rate limiting, circuit breaker, and async."""
+
 from __future__ import annotations
 
 import logging
@@ -61,7 +62,9 @@ class Router:
             if self._rate_limiter:
                 self._rate_limiter.before_call(provider.name)
             try:
-                resp = provider.chat(messages, tools=tools, tool_choice=tool_choice, **kwargs)
+                resp = provider.chat(
+                    messages, tools=tools, tool_choice=tool_choice, **kwargs
+                )
                 # Reset circuit breaker on success
                 self._record_success(provider.name)
                 # Check for "bad" response: tools offered but model returned nothing useful
@@ -72,7 +75,9 @@ class Router:
                 last_err = e
                 self._record_failure(provider.name, e)
                 continue
-        raise LLMError(f"all providers failed (primary={self.primary.name}): {last_err}")
+        raise LLMError(
+            f"all providers failed (primary={self.primary.name}): {last_err}"
+        )
 
     def _is_circuit_open(self, name: str) -> bool:
         """Check if a provider's circuit breaker is open."""
@@ -82,6 +87,7 @@ class Router:
             # Check if enough time has passed to retry (30s cooldown)
             last_failure = state.get("last_failure", 0.0)
             import time
+
             if time.time() - last_failure < 30.0:
                 return True
             else:
@@ -92,11 +98,18 @@ class Router:
     def _record_failure(self, name: str, exc: Exception) -> None:
         """Record a provider failure for circuit breaker."""
         import time
-        state = self._breaker_state.setdefault(name, {"failures": 0, "last_failure": 0.0})
+
+        state = self._breaker_state.setdefault(
+            name, {"failures": 0, "last_failure": 0.0}
+        )
         state["failures"] += 1
         state["last_failure"] = time.time()
         if state["failures"] >= 5:
-            logger.warning("provider %s circuit breaker OPEN after %d failures", name, state["failures"])
+            logger.warning(
+                "provider %s circuit breaker OPEN after %d failures",
+                name,
+                state["failures"],
+            )
 
     def _record_success(self, name: str) -> None:
         """Reset circuit breaker on success."""

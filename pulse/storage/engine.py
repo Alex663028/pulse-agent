@@ -4,8 +4,8 @@ Replaces Hermes' reliance on Honcho/cloud memory backends. Used for session
 logs, trajectory capture (for skill evolution + RL export later), eval runs,
 skill versioning, and full-text memory search.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 
 import json
@@ -92,7 +92,9 @@ class Storage:
             cursor = conn.execute("PRAGMA table_info(skill_versions)")
             columns = [row[1] for row in cursor.fetchall()]
             if "content_snapshot" not in columns:
-                conn.execute("ALTER TABLE skill_versions ADD COLUMN content_snapshot TEXT")
+                conn.execute(
+                    "ALTER TABLE skill_versions ADD COLUMN content_snapshot TEXT"
+                )
                 conn.commit()
         except sqlite3.OperationalError:
             pass  # table may not exist yet, next executescript will create it
@@ -132,7 +134,9 @@ class Storage:
                 raise
 
     # ---- sessions & trajectories ----
-    def store_session(self, sid: str, summary: Optional[str] = None, token_usage: int = 0) -> None:
+    def store_session(
+        self, sid: str, summary: Optional[str] = None, token_usage: int = 0
+    ) -> None:
         """Insert or replace a session row with its summary and token usage."""
         with self._tx():
             self._conn.execute(
@@ -152,7 +156,14 @@ class Storage:
         with self._tx():
             self._conn.execute(
                 "INSERT OR REPLACE INTO trajectories(id, session_id, created_at, outcome, used_skills, data) VALUES(?,?,?,?,?,?)",
-                (tid, session_id, _now(), int(outcome), json.dumps(used_skills), json.dumps(data)),
+                (
+                    tid,
+                    session_id,
+                    _now(),
+                    int(outcome),
+                    json.dumps(used_skills),
+                    json.dumps(data),
+                ),
             )
 
     def query_trajectories(
@@ -200,18 +211,18 @@ class Storage:
             )
 
     def latest_eval(self, skill_id: str) -> Optional[dict[str, Any]]:
-            """Return the most recent evaluation row for a skill id, or None."""
-            with self._lock:
-                row = self._conn.execute(
-                    "SELECT * FROM eval_runs WHERE skill_id = ? ORDER BY created_at DESC LIMIT 1",
-                    (skill_id,),
-                ).fetchone()
-            if not row:
-                return None
-            d = dict(row)
-            if isinstance(d.get("metrics"), str):
-                d["metrics"] = json.loads(d["metrics"])
-            return d
+        """Return the most recent evaluation row for a skill id, or None."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM eval_runs WHERE skill_id = ? ORDER BY created_at DESC LIMIT 1",
+                (skill_id,),
+            ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        if isinstance(d.get("metrics"), str):
+            d["metrics"] = json.loads(d["metrics"])
+        return d
 
     # ---- skill versions ----
     def save_skill_version(
@@ -227,7 +238,16 @@ class Storage:
         with self._tx():
             self._conn.execute(
                 "INSERT OR REPLACE INTO skill_versions(id, skill_name, version, path, status, created_at, metrics, content_snapshot) VALUES(?,?,?,?,?,?,?,?)",
-                (f"{skill_name}@{version}", skill_name, version, path, status, _now(), json.dumps(metrics), content_snapshot),
+                (
+                    f"{skill_name}@{version}",
+                    skill_name,
+                    version,
+                    path,
+                    status,
+                    _now(),
+                    json.dumps(metrics),
+                    content_snapshot,
+                ),
             )
 
     def skill_versions(self, skill_name: str) -> list[dict[str, Any]]:
@@ -244,10 +264,12 @@ class Storage:
         """Insert a memory blob into both the fallback table and the FTS5 index."""
         with self._tx():
             self._conn.execute(
-                "INSERT INTO fts_memory(session_id, content, ts) VALUES(?,?,?)", (session_id, content, _now())
+                "INSERT INTO fts_memory(session_id, content, ts) VALUES(?,?,?)",
+                (session_id, content, _now()),
             )
             self._conn.execute(
-                "INSERT INTO fts_memory_ix(content, session_id, ts) VALUES(?,?,?)", (content, session_id, _now())
+                "INSERT INTO fts_memory_ix(content, session_id, ts) VALUES(?,?,?)",
+                (content, session_id, _now()),
             )
 
     def list_sessions(self) -> list[dict[str, Any]]:
@@ -264,8 +286,12 @@ class Storage:
         """Delete a session and its associated memory entries."""
         with self._tx():
             self._conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
-            self._conn.execute("DELETE FROM fts_memory WHERE session_id = ?", (session_id,))
-            self._conn.execute("DELETE FROM fts_memory_ix WHERE session_id = ?", (session_id,))
+            self._conn.execute(
+                "DELETE FROM fts_memory WHERE session_id = ?", (session_id,)
+            )
+            self._conn.execute(
+                "DELETE FROM fts_memory_ix WHERE session_id = ?", (session_id,)
+            )
 
     def search_sessions(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Full-text search across all session memory (FTS5)."""

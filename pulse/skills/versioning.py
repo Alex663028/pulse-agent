@@ -4,6 +4,7 @@ Promoted skills are versioned so a regression can be rolled back to a known-good
 snapshot. Each promoted version stores an immutable content snapshot in SQLite so
 rollback restores both the version metadata and the SKILL.md bytes durably.
 """
+
 from __future__ import annotations
 
 import re
@@ -35,7 +36,9 @@ def _read_skill_md_bytes(path: Path) -> str:
     return ""
 
 
-def snapshot(registry: SkillRegistry, name: str, level: str = "patch") -> Optional[SkillRecord]:
+def snapshot(
+    registry: SkillRegistry, name: str, level: str = "patch"
+) -> Optional[SkillRecord]:
     """Bump version + persist a new SKILL.md snapshot with immutable content backup."""
     rec = registry.get(name)
     if not rec:
@@ -48,13 +51,19 @@ def snapshot(registry: SkillRegistry, name: str, level: str = "patch") -> Option
     (rec.path / "SKILL.md").write_text(content, encoding="utf-8")
     # Save with immutable content snapshot
     registry.storage.save_skill_version(
-        skill_name=name, version=new_ver, path=str(rec.path), status=rec.status,
-        metrics=rec.metrics, content_snapshot=content,
+        skill_name=name,
+        version=new_ver,
+        path=str(rec.path),
+        status=rec.status,
+        metrics=rec.metrics,
+        content_snapshot=content,
     )
     return rec
 
 
-def rollback(registry: SkillRegistry, name: str, to_version: Optional[str] = None) -> Optional[SkillRecord]:
+def rollback(
+    registry: SkillRegistry, name: str, to_version: Optional[str] = None
+) -> Optional[SkillRecord]:
     """Roll a skill back to a previous version, restoring both metadata and SKILL.md bytes.
 
     Uses the immutable content_snapshot stored in skill_versions to durably restore
@@ -68,10 +77,13 @@ def rollback(registry: SkillRegistry, name: str, to_version: Optional[str] = Non
     else:
         # latest non-current version that was promoted and has a content snapshot
         target = next(
-            (v for v in versions
-             if v["version"] != versions[0]["version"]
-             and v.get("status") == "promoted"
-             and v.get("content_snapshot")),
+            (
+                v
+                for v in versions
+                if v["version"] != versions[0]["version"]
+                and v.get("status") == "promoted"
+                and v.get("content_snapshot")
+            ),
             # fallback: latest with any snapshot
             next((v for v in versions if v.get("content_snapshot")), versions[-1]),
         )
@@ -92,6 +104,7 @@ def rollback(registry: SkillRegistry, name: str, to_version: Optional[str] = Non
             rec.body = restored_body
             # Re-parse to sync frontmatter
             from pulse.skills.loader import parse_skill_md
+
             fm, body = parse_skill_md(restored_body)
             if fm:
                 rec.frontmatter.update(fm)
@@ -103,8 +116,11 @@ def rollback(registry: SkillRegistry, name: str, to_version: Optional[str] = Non
 
         # Persist as a new version row (so rollback is also versioned)
         registry.storage.save_skill_version(
-            skill_name=name, version=target["version"], path=str(rec.path),
-            status="promoted", metrics=target.get("metrics", {}),
+            skill_name=name,
+            version=target["version"],
+            path=str(rec.path),
+            status="promoted",
+            metrics=target.get("metrics", {}),
             content_snapshot=restored_body,
         )
     return rec

@@ -1,4 +1,5 @@
 """Enterprise features: audit logging, RBAC/ABAC, SSO integration."""
+
 from __future__ import annotations
 
 import hashlib
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---- Audit Logging ----
+
 
 class AuditLevel(str, Enum):
     DEBUG = "debug"
@@ -64,7 +66,9 @@ class AuditLogger:
         except Exception:
             logger.exception("audit log write failed")
 
-    def query(self, user_id: str = "", action: str = "", limit: int = 100) -> list[AuditEntry]:
+    def query(
+        self, user_id: str = "", action: str = "", limit: int = 100
+    ) -> list[AuditEntry]:
         """Query audit entries."""
         results = self._entries
         if user_id:
@@ -75,6 +79,7 @@ class AuditLogger:
 
 
 # ---- RBAC / ABAC ----
+
 
 class Permission(str, Enum):
     # Skill permissions
@@ -101,6 +106,7 @@ class Permission(str, Enum):
 @dataclass
 class Role:
     """RBAC role with a set of permissions."""
+
     name: str
     permissions: set[Permission] = field(default_factory=set)
     description: str = ""
@@ -112,10 +118,13 @@ class Role:
 @dataclass
 class User:
     """User with roles and optional attributes for ABAC."""
+
     id: str
     name: str
     roles: list[Role] = field(default_factory=list)
-    attributes: dict[str, Any] = field(default_factory=dict)  # department, team, clearance_level, etc.
+    attributes: dict[str, Any] = field(
+        default_factory=dict
+    )  # department, team, clearance_level, etc.
     is_active: bool = True
 
     def has_permission(self, perm: Permission) -> bool:
@@ -129,37 +138,55 @@ class User:
 ROLES = {
     "viewer": Role(
         name="viewer",
-        permissions={Permission.SKILL_READ, Permission.MEMORY_READ, Permission.SESSION_READ},
-        description="Read-only access"
+        permissions={
+            Permission.SKILL_READ,
+            Permission.MEMORY_READ,
+            Permission.SESSION_READ,
+        },
+        description="Read-only access",
     ),
     "operator": Role(
         name="operator",
         permissions={
-            Permission.SKILL_READ, Permission.SKILL_EVAL,
-            Permission.MEMORY_READ, Permission.MEMORY_WRITE,
-            Permission.TOOL_USE, Permission.SESSION_READ, Permission.SESSION_DELETE,
+            Permission.SKILL_READ,
+            Permission.SKILL_EVAL,
+            Permission.MEMORY_READ,
+            Permission.MEMORY_WRITE,
+            Permission.TOOL_USE,
+            Permission.SESSION_READ,
+            Permission.SESSION_DELETE,
         },
-        description="Day-to-day operator"
+        description="Day-to-day operator",
     ),
     "developer": Role(
         name="developer",
         permissions={
-            Permission.SKILL_READ, Permission.SKILL_WRITE, Permission.SKILL_EVAL,
-            Permission.MEMORY_READ, Permission.MEMORY_WRITE, Permission.MEMORY_DELETE,
-            Permission.TOOL_USE, Permission.TOOL_MANAGE,
-            Permission.SESSION_READ, Permission.SESSION_DELETE,
+            Permission.SKILL_READ,
+            Permission.SKILL_WRITE,
+            Permission.SKILL_EVAL,
+            Permission.MEMORY_READ,
+            Permission.MEMORY_WRITE,
+            Permission.MEMORY_DELETE,
+            Permission.TOOL_USE,
+            Permission.TOOL_MANAGE,
+            Permission.SESSION_READ,
+            Permission.SESSION_DELETE,
         },
-        description="Developer with write access"
+        description="Developer with write access",
     ),
     "admin": Role(
         name="admin",
         permissions={Permission.ADMIN_FULL},
-        description="Full administrator access"
+        description="Full administrator access",
     ),
     "auditor": Role(
         name="auditor",
-        permissions={Permission.AUDIT_READ, Permission.SKILL_READ, Permission.SESSION_READ},
-        description="Security auditor"
+        permissions={
+            Permission.AUDIT_READ,
+            Permission.SKILL_READ,
+            Permission.SESSION_READ,
+        },
+        description="Security auditor",
     ),
 }
 
@@ -211,6 +238,7 @@ class AuthManager:
 
 # ---- SSO Integration (OIDC/SAML stub) ----
 
+
 class SSOProvider:
     """SSO provider stub. In production, integrate with SAML/OIDC provider."""
 
@@ -229,8 +257,14 @@ class SSOProvider:
 
 
 __all__ = [
-    "AuditLevel", "AuditEntry", "AuditLogger",
-    "Permission", "Role", "User",
-    "ROLES", "USERS", "AuthManager",
+    "AuditLevel",
+    "AuditEntry",
+    "AuditLogger",
+    "Permission",
+    "Role",
+    "User",
+    "ROLES",
+    "USERS",
+    "AuthManager",
     "SSOProvider",
 ]

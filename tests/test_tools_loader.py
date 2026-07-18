@@ -1,4 +1,5 @@
 """Tests for tools/loader.py — ToolSpec, ShellTool, ScriptTool, load functions."""
+
 from __future__ import annotations
 
 import json
@@ -177,7 +178,7 @@ class TestLoadSpecs:
     def test_load_py_valid(self, tmp_path):
         """_load_py_spec loads a Python file."""
         f = tmp_path / "my_tool.py"
-        f.write_text("\"\"\"My custom tool\"\"\"\ndef run(**kwargs): pass")
+        f.write_text('"""My custom tool"""\ndef run(**kwargs): pass')
         spec = _load_py_spec(f)
         assert spec is not None
         assert spec.name == "my_tool"

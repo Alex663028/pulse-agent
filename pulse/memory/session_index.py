@@ -1,5 +1,6 @@
 """Session index: persist each turn's content into the FTS5 memory index so it
 is searchable across sessions (a core Hermes feature, done locally here)."""
+
 from __future__ import annotations
 
 from uuid import uuid4

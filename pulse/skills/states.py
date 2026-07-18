@@ -6,6 +6,7 @@
 
 Maps an evaluation *decision* to the resulting skill *status*.
 """
+
 from __future__ import annotations
 
 DECISION_TO_STATUS: dict[str, str] = {

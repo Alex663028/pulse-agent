@@ -1,4 +1,5 @@
 """Tests for skill versioning + rollback commands."""
+
 from __future__ import annotations
 
 import uuid
@@ -12,11 +13,21 @@ from tests._helpers import make_runtime
 def _make_skill(tmp: Path, name: str, version: str, status: str) -> SkillRecord:
     d = tmp / name
     d.mkdir(parents=True, exist_ok=True)
-    fm = {"name": name, "description": f"skill {name}", "version": version,
-          "metadata": {"pulse": {"status": status}}}
+    fm = {
+        "name": name,
+        "description": f"skill {name}",
+        "version": version,
+        "metadata": {"pulse": {"status": status}},
+    }
     body = f"# {name}\nsteps"
     (d / "SKILL.md").write_text(
-        "---\n" + __import__("yaml").safe_dump(fm, sort_keys=False) + "---\n\n" + body + "\n", encoding="utf-8")
+        "---\n"
+        + __import__("yaml").safe_dump(fm, sort_keys=False)
+        + "---\n\n"
+        + body
+        + "\n",
+        encoding="utf-8",
+    )
     return load_skill_dir(d)
 
 

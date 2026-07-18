@@ -3,6 +3,7 @@
 Integrates with LangChain/LlamaIndex for document loaders, splitters, and
 vector stores. Falls back to SQLite FTS5 if no vector store is configured.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -28,7 +29,9 @@ class Document:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @staticmethod
-    def from_text(text: str, source: str = "inline", chunk_size: int = 500, overlap: int = 50) -> list[Document]:
+    def from_text(
+        text: str, source: str = "inline", chunk_size: int = 500, overlap: int = 50
+    ) -> list[Document]:
         """Split text into overlapping chunks."""
         chunks: list[Document] = []
         start = 0
@@ -37,8 +40,14 @@ class Document:
         while start < len(text):
             end = min(start + chunk_size, len(text))
             chunk = text[start:end]
-            doc_id = hashlib.sha1(f"{source}:{idx}:{chunk[:32]}".encode()).hexdigest()[:12]
-            chunks.append(Document(doc_id=doc_id, content=chunk, source=source, metadata={"chunk": idx}))
+            doc_id = hashlib.sha1(f"{source}:{idx}:{chunk[:32]}".encode()).hexdigest()[
+                :12
+            ]
+            chunks.append(
+                Document(
+                    doc_id=doc_id, content=chunk, source=source, metadata={"chunk": idx}
+                )
+            )
             idx += 1
             start = end - overlap if end < len(text) else end
         return chunks
@@ -65,7 +74,9 @@ class RAGPipeline:
     ) -> None:
         self.storage = storage
         self.memory = memory
-        self.embedding_model = embedding_model or os.environ.get("PULSE_EMBEDDING_MODEL", "")
+        self.embedding_model = embedding_model or os.environ.get(
+            "PULSE_EMBEDDING_MODEL", ""
+        )
         self.vector_backend = vector_backend
         self.chunk_size = chunk_size
         self.overlap = overlap
@@ -82,7 +93,9 @@ class RAGPipeline:
 
     def ingest_text(self, text: str, source: str = "inline") -> int:
         """Chunk text and index it. Returns chunk count."""
-        docs = Document.from_text(text, source=source, chunk_size=self.chunk_size, overlap=self.overlap)
+        docs = Document.from_text(
+            text, source=source, chunk_size=self.chunk_size, overlap=self.overlap
+        )
         self._chunks.extend(docs)
         for d in docs:
             if d.doc_id in self._indexed:
@@ -96,12 +109,16 @@ class RAGPipeline:
         hits = self.storage.search_memory(query, limit=limit)
         results: list[dict[str, Any]] = []
         for h in hits:
-            results.append({
-                "doc_id": h.get("session_id", ""),
-                "content": h.get("content", ""),
-                "score": h.get("score", 0.0),
-                "source": h.get("session_id", "").split(":")[0] if ":" in h.get("session_id", "") else "",
-            })
+            results.append(
+                {
+                    "doc_id": h.get("session_id", ""),
+                    "content": h.get("content", ""),
+                    "score": h.get("score", 0.0),
+                    "source": h.get("session_id", "").split(":")[0]
+                    if ":" in h.get("session_id", "")
+                    else "",
+                }
+            )
         return results
 
     def build_context(self, query: str, limit: int = 3) -> str:

@@ -1,4 +1,5 @@
 """HTTP utilities: retry wrapper for resilient outbound requests, JSON parsing helper."""
+
 from __future__ import annotations
 
 import json
@@ -41,9 +42,17 @@ def http_request(
                 return resp.status, resp.read()
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             if attempt < max_retries:
-                wait = backoff ** attempt
-                logger.debug("http_request retry %d/%d in %.1fs: %s", attempt + 1, max_retries, wait, e)
+                wait = backoff**attempt
+                logger.debug(
+                    "http_request retry %d/%d in %.1fs: %s",
+                    attempt + 1,
+                    max_retries,
+                    wait,
+                    e,
+                )
                 time.sleep(wait)
             else:
-                raise urllib.error.URLError(f"all {max_retries + 1} attempts failed") from e
+                raise urllib.error.URLError(
+                    f"all {max_retries + 1} attempts failed"
+                ) from e
     raise urllib.error.URLError(f"all {max_retries + 1} attempts failed")

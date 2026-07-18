@@ -14,6 +14,7 @@ Instead:
 
 Promotion, quarantine and rollback are all explicit and reversible.
 """
+
 from __future__ import annotations
 
 import statistics
@@ -63,7 +64,9 @@ REGRESSION_DELTA = 0.15  # success drop vs baseline that triggers rollback/quara
 class SkillEvaluator:
     """Evaluates candidate skills against golden tasks and produces a reversible decision."""
 
-    def __init__(self, registry: SkillRegistry, min_success_rate: float = MIN_SUCCESS_RATE):
+    def __init__(
+        self, registry: SkillRegistry, min_success_rate: float = MIN_SUCCESS_RATE
+    ):
         self.registry = registry
         self.min_success_rate = min_success_rate
 
@@ -84,7 +87,9 @@ class SkillEvaluator:
         base_sr = None
         delta = None
         if baseline is not None:
-            base_res = self.registry.storage.latest_eval(f"{baseline.name}@{baseline.version}")
+            base_res = self.registry.storage.latest_eval(
+                f"{baseline.name}@{baseline.version}"
+            )
             if base_res:
                 base_sr = base_res["metrics"].get("success_rate")
                 delta = sr - base_sr if base_sr is not None else None
@@ -100,10 +105,17 @@ class SkillEvaluator:
             delta_success=delta,
             decision=decision,
             reason=reason,
-            metrics={"success_rate": sr, "avg_tokens": avg_tok, "avg_steps": avg_steps, "runs": len(outcomes)},
+            metrics={
+                "success_rate": sr,
+                "avg_tokens": avg_tok,
+                "avg_steps": avg_steps,
+                "runs": len(outcomes),
+            },
         )
 
-    def _decide(self, sr: float, base_sr: Optional[float], candidate: SkillRecord) -> tuple[EvalDecision, str]:
+    def _decide(
+        self, sr: float, base_sr: Optional[float], candidate: SkillRecord
+    ) -> tuple[EvalDecision, str]:
         if sr < self.min_success_rate:
             return "deprecate", f"success_rate {sr:.2f} < min {self.min_success_rate}"
         if base_sr is not None:
@@ -117,7 +129,12 @@ class SkillEvaluator:
         # No baseline: accept if it clears the bar.
         return "promote", f"clears min success_rate ({sr:.2f})"
 
-    def apply(self, result: EvalResult, candidate: SkillRecord, baseline: Optional[SkillRecord] = None) -> None:
+    def apply(
+        self,
+        result: EvalResult,
+        candidate: SkillRecord,
+        baseline: Optional[SkillRecord] = None,
+    ) -> None:
         """Persist the decision: update status + record the eval run.
 
         For rollback decisions, also invokes the versioning.rollback() path
@@ -128,6 +145,7 @@ class SkillEvaluator:
         # Rollback: restore the baseline/known-good version durably
         if result.decision == "rollback":
             from pulse.skills.versioning import rollback
+
             target_version = baseline.version if baseline else None
             rollback(self.registry, candidate.name, to_version=target_version)
             new_status = "promoted"

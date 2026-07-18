@@ -1,4 +1,5 @@
 """Tool registry with permission + recovery-aware invocation + filtering."""
+
 from __future__ import annotations
 
 import logging
@@ -71,8 +72,10 @@ class ToolRegistry:
     def allowed_names(self) -> list[str]:
         """Return only the tool names that pass filtering."""
         return [
-            n for n in self._tools
-            if (not self._allowlist or n in self._allowlist) and n not in self._blocklist
+            n
+            for n in self._tools
+            if (not self._allowlist or n in self._allowlist)
+            and n not in self._blocklist
         ]
 
     def set_allowlist(self, names: Optional[Set[str]]) -> None:

@@ -3,6 +3,7 @@
 Requires ``TELEGRAM_BOT_TOKEN`` in ``~/.pulse/.env`` or envar.
 Uses only the stdlib + ``requests`` (no heavy framework).
 """
+
 from __future__ import annotations
 
 import json
@@ -20,7 +21,11 @@ API = "https://api.telegram.org/bot{token}/{method}"
 
 
 def _post(url: str, data: dict) -> dict:
-    req = urllib.request.Request(url, data=json.dumps(data).encode(), headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(data).encode(),
+        headers={"Content-Type": "application/json"},
+    )
     with urllib.request.urlopen(req, timeout=10) as resp:
         return json.loads(resp.read())
 
@@ -49,22 +54,28 @@ class TelegramGateway(Gateway):
         if not self._token:
             # try env
             import os
+
             self._token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         if not self._token:
             # try .env
             from pulse.config.settings import load_env
+
             env = load_env(runtime.settings)
             self._token = env.get("TELEGRAM_BOT_TOKEN", "")
         if not self._token:
             logger.warning("[telegram] no TELEGRAM_BOT_TOKEN — gateway disabled")
             return
         me = self._call("getMe")
-        logger.info("[telegram] connected as @%s", me.get('result', {}).get('username', '?'))
+        logger.info(
+            "[telegram] connected as @%s", me.get("result", {}).get("username", "?")
+        )
 
         self._active = True
         while self._active:
             try:
-                updates = self._call("getUpdates", {"offset": self._offset, "timeout": 30})
+                updates = self._call(
+                    "getUpdates", {"offset": self._offset, "timeout": 30}
+                )
             except (urllib.error.URLError, OSError, KeyError, ValueError):
                 time.sleep(3)
                 continue
@@ -86,7 +97,10 @@ class TelegramGateway(Gateway):
                 if res.success:
                     self._send(chat_id, res.answer or "(empty)")
                     if res.candidate_skill:
-                        self._send(chat_id, f"↳ proposed skill: {res.candidate_skill} (eval: pulse skills eval {res.candidate_skill})")
+                        self._send(
+                            chat_id,
+                            f"↳ proposed skill: {res.candidate_skill} (eval: pulse skills eval {res.candidate_skill})",
+                        )
                 else:
                     self._send(chat_id, f"error: {res.error or 'failed'}")
             time.sleep(0.5)

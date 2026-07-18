@@ -5,6 +5,7 @@ a candidate (status=candidate). It is then evaluated (see evaluator.py) before
 any promotion. Draft generation uses a template; an optional LLM pass refines
 the prose (darwin-skill style iterative polish).
 """
+
 from __future__ import annotations
 
 import re
@@ -53,7 +54,10 @@ def propose_skill(
     dest = skills_dir / name
     dest.mkdir(parents=True, exist_ok=True)
 
-    body_steps = "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps)) or "1. (no steps captured)"
+    body_steps = (
+        "\n".join(f"{i + 1}. {s}" for i, s in enumerate(steps))
+        or "1. (no steps captured)"
+    )
     description = f"Auto-distilled skill for: {task[:200]}. Use when a similar multi-step task appears."
     body = (
         f"# How to: {task.strip()}\n\n"
@@ -65,7 +69,10 @@ def propose_skill(
         try:
             resp = llm.chat(
                 [
-                    LLMMessage(role="system", content="Rewrite the following draft skill into a clear, reusable procedure. Keep it concise."),
+                    LLMMessage(
+                        role="system",
+                        content="Rewrite the following draft skill into a clear, reusable procedure. Keep it concise.",
+                    ),
                     LLMMessage(role="user", content=body),
                 ]
             )
@@ -81,5 +88,18 @@ def propose_skill(
         "version": "0.1.0",
         "metadata": {"pulse": {"source": "self_evolved", "status": "candidate"}},
     }
-    (dest / "SKILL.md").write_text(dump_skill_md(SkillRecord(id=f"{name}@0.1.0", name=name, path=dest, version="0.1.0", frontmatter=fm, body=body, status="candidate")), encoding="utf-8")
+    (dest / "SKILL.md").write_text(
+        dump_skill_md(
+            SkillRecord(
+                id=f"{name}@0.1.0",
+                name=name,
+                path=dest,
+                version="0.1.0",
+                frontmatter=fm,
+                body=body,
+                status="candidate",
+            )
+        ),
+        encoding="utf-8",
+    )
     return load_skill_dir(dest)

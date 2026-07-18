@@ -6,6 +6,7 @@ Improvements over original:
 - stderr captured to a ring buffer for debugging
 - Graceful handling of subprocess crashes mid-request
 """
+
 from __future__ import annotations
 
 import json
@@ -39,7 +40,9 @@ _JSON_TO_PY: dict[str, tuple[type, ...]] = {
 }
 
 
-def validate_tool_args(schema: dict[str, Any] | None, args: dict[str, Any]) -> str | None:
+def validate_tool_args(
+    schema: dict[str, Any] | None, args: dict[str, Any]
+) -> str | None:
     """Validate ``args`` against a JSON-schema ``inputSchema``."""
     if not schema:
         return None
@@ -56,7 +59,9 @@ def validate_tool_args(schema: dict[str, Any] | None, args: dict[str, Any]) -> s
         if json_type and json_type in _JSON_TO_PY:
             expected = _JSON_TO_PY[json_type]
             if not isinstance(value, expected):
-                return f"argument '{key}' must be {json_type}, got {type(value).__name__}"
+                return (
+                    f"argument '{key}' must be {json_type}, got {type(value).__name__}"
+                )
     return None
 
 
@@ -128,13 +133,17 @@ class MCPClient:
                 last_error = e
                 logger.warning(
                     "MCP server start attempt %d/%d failed: %s",
-                    attempt + 1, self.max_retries, e,
+                    attempt + 1,
+                    self.max_retries,
+                    e,
                 )
                 self._cleanup_proc()
                 if attempt < self.max_retries - 1:
-                    wait = min(2 ** attempt, 10)
+                    wait = min(2**attempt, 10)
                     time.sleep(wait)
-        raise MCPError(f"failed to start MCP server after {self.max_retries} attempts: {last_error}")
+        raise MCPError(
+            f"failed to start MCP server after {self.max_retries} attempts: {last_error}"
+        )
 
     def _launch(self) -> None:
         """Start the subprocess and reader threads."""
@@ -154,11 +163,15 @@ class MCPClient:
         self._stop.clear()
         if self._proc.stdout is None:
             raise MCPError("MCP server did not provide stdout")
-        self._read_thread = threading.Thread(target=self._read_loop, daemon=True, name="mcp-read")
+        self._read_thread = threading.Thread(
+            target=self._read_loop, daemon=True, name="mcp-read"
+        )
         self._read_thread.start()
         # stderr thread: capture server logs for debugging
         if self._proc.stderr is not None:
-            self._stderr_thread = threading.Thread(target=self._stderr_loop, daemon=True, name="mcp-stderr")
+            self._stderr_thread = threading.Thread(
+                target=self._stderr_loop, daemon=True, name="mcp-stderr"
+            )
             self._stderr_thread.start()
 
     def _do_initialize(self) -> None:
@@ -182,7 +195,9 @@ class MCPClient:
         """Start a background health-check polling thread."""
         if self._health_thread and self._health_thread.is_alive():
             return
-        self._health_thread = threading.Thread(target=self._health_loop, daemon=True, name="mcp-health")
+        self._health_thread = threading.Thread(
+            target=self._health_loop, daemon=True, name="mcp-health"
+        )
         self._health_thread.start()
 
     def _health_loop(self) -> None:
@@ -195,7 +210,9 @@ class MCPClient:
                 logger.warning("MCP server '%s' is no longer alive", self.command)
                 self._consecutive_failures += 1
                 if self._consecutive_failures >= 3:
-                    logger.error("MCP server '%s' crashed, attempting reconnect...", self.command)
+                    logger.error(
+                        "MCP server '%s' crashed, attempting reconnect...", self.command
+                    )
                     try:
                         self._relaunch()
                     except MCPError as e:
@@ -252,7 +269,9 @@ class MCPClient:
         for line in self._proc.stderr:
             self._stderr_buffer.append(line.strip())
 
-    def _request(self, method: str, params: Any = None, *, notification: bool = False) -> dict[str, Any]:
+    def _request(
+        self, method: str, params: Any = None, *, notification: bool = False
+    ) -> dict[str, Any]:
         """Send a JSON-RPC request and wait for the matching response.
 
         If the server is dead, attempts a single reconnect transparently.
@@ -310,7 +329,10 @@ class MCPClient:
         """Invoke a tool on the server and return its raw result dict."""
         resp = self._request("tools/call", {"name": name, "arguments": arguments})
         if "error" in resp:
-            return {"content": [{"type": "text", "text": str(resp["error"])}], "isError": True}
+            return {
+                "content": [{"type": "text", "text": str(resp["error"])}],
+                "isError": True,
+            }
         return resp.get("result", {"content": [], "isError": False})
 
     def is_alive(self) -> bool:
@@ -349,7 +371,9 @@ def probe_server(cfg: Any, timeout: float = 4.0) -> tuple[bool, int, str]:
     health checks without leaking processes.
     """
     try:
-        client = MCPClient(command=cfg.command, args=list(cfg.args or []), timeout=timeout)
+        client = MCPClient(
+            command=cfg.command, args=list(cfg.args or []), timeout=timeout
+        )
         client.start()
         try:
             specs = client.list_tools()

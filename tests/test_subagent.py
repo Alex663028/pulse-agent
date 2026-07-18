@@ -1,4 +1,5 @@
 """Tests for orchestrator/subagent.py — SubagentPool, decompose, merge_results."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -31,7 +32,12 @@ class TestSubagentTask:
     def test_custom(self):
         """SubagentTask accepts custom values."""
         task = SubagentTask(
-            id="t2", description="review", role="reviewer", timeout=30.0, max_tokens=2048, context="extra"
+            id="t2",
+            description="review",
+            role="reviewer",
+            timeout=30.0,
+            max_tokens=2048,
+            context="extra",
         )
         assert task.role == "reviewer"
         assert task.timeout == 30.0
@@ -100,7 +106,11 @@ class TestSubagentPool:
         mock_llm = MagicMock()
         usage = Usage(prompt_tokens=10, completion_tokens=5)
         mock_llm.chat.return_value = LLMResponse(
-            content="done", tool_calls=[], model="test", usage=usage, finish_reason="stop"
+            content="done",
+            tool_calls=[],
+            model="test",
+            usage=usage,
+            finish_reason="stop",
         )
         results = pool.run(tasks, primary=mock_llm)
         assert len(results) == 3
@@ -146,7 +156,13 @@ class TestSubagentPool:
         usage = Usage(prompt_tokens=10, completion_tokens=5)
         # First call success, second call raises
         mock_llm.chat.side_effect = [
-            LLMResponse(content="ok", tool_calls=[], model="test", usage=usage, finish_reason="stop"),
+            LLMResponse(
+                content="ok",
+                tool_calls=[],
+                model="test",
+                usage=usage,
+                finish_reason="stop",
+            ),
             ValueError("LLM failed"),
         ]
         results = pool.run(tasks, primary=mock_llm)
@@ -164,7 +180,11 @@ class TestSubagentPool:
         mock_router = MagicMock()
         usage = Usage(prompt_tokens=10, completion_tokens=5)
         mock_router.chat.return_value = LLMResponse(
-            content="done", tool_calls=[], model="test", usage=usage, finish_reason="stop"
+            content="done",
+            tool_calls=[],
+            model="test",
+            usage=usage,
+            finish_reason="stop",
         )
         mock_tools = MagicMock()
         mock_tools.schemas.return_value = []

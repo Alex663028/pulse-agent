@@ -1,4 +1,5 @@
 """Build a provider/router from application settings."""
+
 from __future__ import annotations
 
 from pulse.config.settings import DEFAULT_BASE_URL, Settings, load_env
@@ -13,18 +14,25 @@ from pulse.llm.router import Router
 def _make_compat(settings: Settings, env: dict[str, str], provider: str) -> LLMProvider:
     ms = settings.model
     if provider == "ollama":
-        return OpenAICompatProvider(base_url=ms.base_url, api_key="ollama", model=ms.model)
+        return OpenAICompatProvider(
+            base_url=ms.base_url, api_key="ollama", model=ms.model
+        )
     if provider == "anthropic":
         try:
             from pulse.llm.provider import AnthropicProvider
+
             key = env.get("ANTHROPIC_API_KEY") or env.get(settings.api_key_env, "")
             return AnthropicProvider(
-                base_url=ms.base_url if ms.base_url and ms.base_url != DEFAULT_BASE_URL else "https://api.anthropic.com",
+                base_url=ms.base_url
+                if ms.base_url and ms.base_url != DEFAULT_BASE_URL
+                else "https://api.anthropic.com",
                 api_key=key,
                 model=ms.model or "claude-3-5-sonnet-20241022",
             )
         except ImportError:
-            raise LLMError("anthropic package not installed; pip install pulse-agent[anthropic]")
+            raise LLMError(
+                "anthropic package not installed; pip install pulse-agent[anthropic]"
+            )
     key = env.get(settings.api_key_env) or env.get(f"{provider.upper()}_API_KEY", "")
     base_urls = {
         "openai": "https://api.openai.com/v1",

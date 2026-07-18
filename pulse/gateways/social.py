@@ -15,6 +15,7 @@ Option 2: Long-polling (no static IP needed):
 This gateway implements Option 1 (webhook mode) for simplicity. The handler
 should be mounted at a Flask/FastAPI endpoint by your reverse proxy.
 """
+
 from __future__ import annotations
 
 import json
@@ -83,8 +84,12 @@ class FeishuGateway(Gateway):
         import urllib.request
 
         url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
-        data = json.dumps({"app_id": self._app_id, "app_secret": self._app_secret}).encode()
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        data = json.dumps(
+            {"app_id": self._app_id, "app_secret": self._app_secret}
+        ).encode()
+        req = urllib.request.Request(
+            url, data=data, headers={"Content-Type": "application/json"}
+        )
         with urllib.request.urlopen(req, timeout=10) as resp:
             result = json.loads(resp.read())
             return result.get("tenant_access_token", "")
@@ -128,7 +133,12 @@ class FeishuGateway(Gateway):
                         session_id=f"feishu:{chat_id}:{source_id}",
                     )
                     answer = res.answer if res.success else f"Error: {res.error}"
-                    _audit_webhook("feishu", source_id, "success" if res.success else "error", answer)
+                    _audit_webhook(
+                        "feishu",
+                        source_id,
+                        "success" if res.success else "error",
+                        answer,
+                    )
                     self._send(chat_id, answer)
 
         return {"code": 0, "msg": "ok"}
@@ -141,17 +151,21 @@ class FeishuGateway(Gateway):
             self._access_token = self.get_tenant_access_token()
 
         # Split text by Feishu max length (2048 chars)
-        chunks = [text[i:i+2048] for i in range(0, max(len(text), 1), 2048)]
+        chunks = [text[i : i + 2048] for i in range(0, max(len(text), 1), 2048)]
 
         for chunk in chunks:
             url = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id"
-            data = json.dumps({
-                "receive_id": chat_id,
-                "msg_type": msg_type,
-                "content": json.dumps({"text": chunk}),
-            }).encode()
+            data = json.dumps(
+                {
+                    "receive_id": chat_id,
+                    "msg_type": msg_type,
+                    "content": json.dumps({"text": chunk}),
+                }
+            ).encode()
             req = urllib.request.Request(
-                url, data=data, method="POST",
+                url,
+                data=data,
+                method="POST",
                 headers={
                     "Authorization": f"Bearer {self._access_token}",
                     "Content-Type": "application/json",
@@ -199,6 +213,7 @@ class WechatGateway(Gateway):
     def verify_signature(self, signature: str, timestamp: str, nonce: str) -> bool:
         """Verify WeChat request signature."""
         import hashlib
+
         s = "".join(sorted([self._token, timestamp, nonce]))
         return hashlib.sha1(s.encode()).hexdigest() == signature
 
@@ -208,6 +223,7 @@ class WechatGateway(Gateway):
             return encrypted
         try:
             from wechatpy.crypto import WeChatCrypto  # noqa: F401
+
             return encrypted
         except ImportError:
             logger.error("wechatpy required for decrypt. pip install wechatpy")
@@ -363,7 +379,9 @@ class WhatsAppGateway(Gateway):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 metadata = value.get("metadata", {})
-                self._phone_number_id = metadata.get("phone_number_id", self._phone_number_id)
+                self._phone_number_id = metadata.get(
+                    "phone_number_id", self._phone_number_id
+                )
                 for msg in value.get("messages", []):
                     if msg.get("type") == "text":
                         from_number = msg.get("from", "")
@@ -372,7 +390,9 @@ class WhatsAppGateway(Gateway):
                             res = self._runtime.orchestrator.run(
                                 text, session_id=f"wa:{from_number}"
                             )
-                            answer = res.answer if res.success else f"Error: {res.error}"
+                            answer = (
+                                res.answer if res.success else f"Error: {res.error}"
+                            )
                             self._send_message(from_number, answer)
 
         return {"status": "ok"}
@@ -382,13 +402,17 @@ class WhatsAppGateway(Gateway):
         import urllib.request
 
         url = f"https://graph.facebook.com/v18.0/{self._phone_number_id}/messages"
-        payload = json.dumps({
-            "messaging_product": "whatsapp",
-            "to": to,
-            "text": {"preview_url": False, "body": text[:4000]},
-        }).encode()
+        payload = json.dumps(
+            {
+                "messaging_product": "whatsapp",
+                "to": to,
+                "text": {"preview_url": False, "body": text[:4000]},
+            }
+        ).encode()
         req = urllib.request.Request(
-            url, data=payload, method="POST",
+            url,
+            data=payload,
+            method="POST",
             headers={
                 "Authorization": f"Bearer {self._access_token}",
                 "Content-Type": "application/json",
@@ -400,7 +424,9 @@ class WhatsAppGateway(Gateway):
         """WhatsApp webhook mode: no polling loop needed."""
         self._runtime = runtime
         self._active = True
-        self._send_url = f"https://graph.facebook.com/v18.0/{self._phone_number_id}/messages"
+        self._send_url = (
+            f"https://graph.facebook.com/v18.0/{self._phone_number_id}/messages"
+        )
         logger.info("[whatsapp] gateway ready (webhook mode)")
 
     def stop(self) -> None:
@@ -418,6 +444,7 @@ def get_gateway(name: str, **kwargs: Any) -> Gateway:
 
     if name == "telegram":
         from pulse.gateways.telegram import TelegramGateway
+
         return TelegramGateway(**kwargs)
 
     cls = gateways.get(name)

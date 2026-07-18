@@ -11,6 +11,7 @@ up a whole run. Pulse classifies every error and applies a targeted policy:
 
 Retries are bounded and deterministic-friendly (the sleep is injectable).
 """
+
 from __future__ import annotations
 
 import secrets
@@ -47,9 +48,24 @@ def classify(exc: Exception) -> str:
         return ErrorClass.CTX_OVERFLOW
     if isinstance(exc, (LLMError, AnthropicError)):
         msg = str(exc).lower()
-        if any(k in msg for k in ("rate", "429", "timeout", "timed out", "connection", "503", "502", "500")):
+        if any(
+            k in msg
+            for k in (
+                "rate",
+                "429",
+                "timeout",
+                "timed out",
+                "connection",
+                "503",
+                "502",
+                "500",
+            )
+        ):
             return ErrorClass.TRANSIENT
-        if any(k in msg for k in ("refuse", "decline", "cannot fulfill", "i can't", "i cannot")):
+        if any(
+            k in msg
+            for k in ("refuse", "decline", "cannot fulfill", "i can't", "i cannot")
+        ):
             return ErrorClass.LLM_REFUSE
         return ErrorClass.UNKNOWN
     if isinstance(exc, (ValueError, KeyError, RuntimeError)):
@@ -73,7 +89,14 @@ def _jitter(jitter: float) -> float:
     return secrets.randbelow(int(jitter * 1000)) / 1000.0
 
 
-def guarded(fn: Callable[..., T], *args, policy: RetryPolicy | None = None, allow: tuple[str, ...] = (ErrorClass.TRANSIENT,), on_tool_fail: Callable[[], None] | None = None, **kwargs) -> T:
+def guarded(
+    fn: Callable[..., T],
+    *args,
+    policy: RetryPolicy | None = None,
+    allow: tuple[str, ...] = (ErrorClass.TRANSIENT,),
+    on_tool_fail: Callable[[], None] | None = None,
+    **kwargs,
+) -> T:
     """Run ``fn`` with bounded retry. Only error classes in ``allow`` are
     retried; everything else fails fast (fail-safe).
 
@@ -82,7 +105,13 @@ def guarded(fn: Callable[..., T], *args, policy: RetryPolicy | None = None, allo
     """
     policy = policy or RetryPolicy()
     # These errors signal code bugs, not recoverable failures; surface immediately
-    _programming_errors = (AttributeError, TypeError, NameError, SyntaxError, ImportError)
+    _programming_errors = (
+        AttributeError,
+        TypeError,
+        NameError,
+        SyntaxError,
+        ImportError,
+    )
     last: Exception | None = None
     for attempt in range(1, policy.max_attempts + 1):
         try:
@@ -97,7 +126,9 @@ def guarded(fn: Callable[..., T], *args, policy: RetryPolicy | None = None, allo
             if cls == ErrorClass.TOOL_FAIL and on_tool_fail:
                 on_tool_fail()
             if cls in allow and attempt < policy.max_attempts:
-                delay = policy.base_delay * (2 ** (attempt - 1)) + _jitter(policy.jitter)
+                delay = policy.base_delay * (2 ** (attempt - 1)) + _jitter(
+                    policy.jitter
+                )
                 policy.sleep(delay)
                 continue
             raise RecoveryError(f"[{cls}] {e}") from e

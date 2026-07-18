@@ -1,4 +1,5 @@
 """Executable skill system — make skills callable, testable, and extensible."""
+
 from __future__ import annotations
 
 import importlib
@@ -116,7 +117,9 @@ def _load_skill_handle(name: str, path: Path, runner_file: Path) -> SkillHandle:
     try:
         spec = importlib.util.spec_from_file_location(f"skill_{name}", str(runner_file))
         if spec is None or spec.loader is None:
-            return SkillHandle(name=name, path=path, runner=None, errors=["failed to load module"])
+            return SkillHandle(
+                name=name, path=path, runner=None, errors=["failed to load module"]
+            )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         if hasattr(mod, "get_tools"):

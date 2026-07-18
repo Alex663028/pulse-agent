@@ -1,4 +1,5 @@
 """Tests for telegram and tui gateways."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -42,6 +43,7 @@ class TestTelegramGateway:
     def test_init(self):
         """TelegramGateway initialization."""
         from pulse.gateways.telegram import TelegramGateway
+
         gw = TelegramGateway(token="test:token")
         assert gw.name == "telegram"
         assert gw._token == "test:token"
@@ -49,6 +51,7 @@ class TestTelegramGateway:
     def test_init_no_token(self):
         """TelegramGateway with no token."""
         from pulse.gateways.telegram import TelegramGateway
+
         gw = TelegramGateway()
         assert gw._token == ""
 
@@ -59,6 +62,7 @@ class TestTuiGateway:
     def test_init(self):
         """TuiGateway initialization."""
         from pulse.gateways.tui import TuiGateway
+
         gw = TuiGateway()
         assert gw.name == "tui"
 

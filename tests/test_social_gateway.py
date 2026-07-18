@@ -1,4 +1,5 @@
 """Tests for social gateway — FeishuGateway, WechatGateway, WhatsAppGateway, get_gateway."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock

@@ -1,4 +1,5 @@
 """Tests for i18n (internationalization)."""
+
 from __future__ import annotations
 
 

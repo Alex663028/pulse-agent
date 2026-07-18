@@ -1,4 +1,5 @@
 """Tests for previously uncovered modules: compactor, session_index, hub, tools/base, provider, cron edges."""
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,14 @@ import pytest
 
 from pulse.config.settings import DEFAULT_BASE_URL, ModelSettings, Settings
 from pulse.llm.config import build_router
-from pulse.llm.provider import LLMError, LLMMessage, LLMResponse, OpenAICompatProvider, ToolCall, Usage
+from pulse.llm.provider import (
+    LLMError,
+    LLMMessage,
+    LLMResponse,
+    OpenAICompatProvider,
+    ToolCall,
+    Usage,
+)
 from pulse.memory.compactor import compact
 from pulse.memory.session_index import SessionIndex
 from pulse.scheduler.cron import Job, Scheduler, _cron_matches, parse_natural
@@ -35,17 +43,22 @@ def test_compactor_naive_long_text():
 
 def test_compactor_with_llm_success():
     from tests._helpers import StubProvider
+
     mock = StubProvider()
-    mock.add_scripted_response(LLMResponse(content="Summary: key points here.", model="stub"))
+    mock.add_scripted_response(
+        LLMResponse(content="Summary: key points here.", model="stub")
+    )
     result = compact("long text " * 200, keep_tokens=50, llm=mock)
     assert "Summary" in result
 
 
 def test_compactor_with_llm_failure_falls_back():
     from tests._helpers import StubProvider
+
     class FailingStub(StubProvider):
         def chat(self, *a, **kw):
             raise RuntimeError("LLM down")
+
     result = compact("x" * 5000, keep_tokens=100, llm=FailingStub())
     assert len(result) < 5000  # fell back to naive
 
@@ -160,6 +173,7 @@ def test_usage_total():
 
 def test_stub_provider_scripted():
     from tests._helpers import StubProvider
+
     r1 = LLMResponse(content="first", model="stub")
     r2 = LLMResponse(content="second", model="stub")
     p = StubProvider()
@@ -171,19 +185,24 @@ def test_stub_provider_scripted():
 
 def test_stub_provider_no_tools_no_call_pattern():
     from tests._helpers import StubProvider
+
     p = StubProvider()
     r = p.chat([LLMMessage(role="user", content="plain text")], tools=None)
     assert r.content.startswith("Acknowledged")
 
 
 def test_openai_compat_provider_init():
-    p = OpenAICompatProvider(base_url="http://localhost:11434/v1", api_key="test", model="qwen2.5:7b")
+    p = OpenAICompatProvider(
+        base_url="http://localhost:11434/v1", api_key="test", model="qwen2.5:7b"
+    )
     assert p.base_url == "http://localhost:11434/v1"
     assert p.model == "qwen2.5:7b"
 
 
 def test_openai_compat_provider_error_wrapped():
-    p = OpenAICompatProvider(base_url="http://localhost:1/v1", api_key="x", model="m", timeout=0.5)
+    p = OpenAICompatProvider(
+        base_url="http://localhost:1/v1", api_key="x", model="m", timeout=0.5
+    )
     with pytest.raises(LLMError):
         p.chat([LLMMessage(role="user", content="hi")])
 
@@ -192,14 +211,26 @@ def test_openai_compat_provider_error_wrapped():
 def test_make_compat_respects_explicit_base_url():
     """A built-in provider (openai) must use an explicitly-set base_url
     instead of the hardcoded official URL."""
-    s = Settings(model=ModelSettings(provider="openai", model="gpt-4o", base_url="https://my-gateway.example.com/v1"))
+    s = Settings(
+        model=ModelSettings(
+            provider="openai",
+            model="gpt-4o",
+            base_url="https://my-gateway.example.com/v1",
+        )
+    )
     router = build_router(s)
     assert router.primary.base_url == "https://my-gateway.example.com/v1"
     assert router.primary.name == "openai-compat"
 
 
 def test_make_compat_openrouter_respects_explicit_base_url():
-    s = Settings(model=ModelSettings(provider="openrouter", model="openai/gpt-4o", base_url="https://proxy.local/v1"))
+    s = Settings(
+        model=ModelSettings(
+            provider="openrouter",
+            model="openai/gpt-4o",
+            base_url="https://proxy.local/v1",
+        )
+    )
     router = build_router(s)
     assert router.primary.base_url == "https://proxy.local/v1"
 
@@ -214,7 +245,11 @@ def test_make_compat_falls_back_to_official_when_default():
 
 
 def test_make_compat_unknown_provider_uses_base_url():
-    s = Settings(model=ModelSettings(provider="custom", model="m", base_url="https://anything/v1"))
+    s = Settings(
+        model=ModelSettings(
+            provider="custom", model="m", base_url="https://anything/v1"
+        )
+    )
     router = build_router(s)
     assert router.primary.base_url == "https://anything/v1"
 
@@ -237,12 +272,14 @@ def test_make_compat_fallback_chain_preserves_base_url():
 # ---- cron edges (was 71%) ----
 def test_cron_matches_wildcard():
     from datetime import datetime
+
     dt = datetime(2026, 6, 15, 14, 30)
     assert _cron_matches("* * * * *", dt)
 
 
 def test_cron_matches_specific():
     from datetime import datetime
+
     dt = datetime(2026, 6, 15, 14, 30)
     assert _cron_matches("30 14 15 6 *", dt)
     assert not _cron_matches("31 14 15 6 *", dt)
@@ -250,12 +287,14 @@ def test_cron_matches_specific():
 
 def test_cron_matches_range():
     from datetime import datetime
+
     dt = datetime(2026, 6, 15, 10, 0)
     assert _cron_matches("0 9-17 * * *", dt)
 
 
 def test_cron_invalid_fields():
     from datetime import datetime
+
     dt = datetime(2026, 6, 15, 10, 0)
     assert not _cron_matches("0 10", dt)  # only 2 fields
 
@@ -304,7 +343,8 @@ def test_hub_install_from_local_dir():
     fm = {"name": "temp-skill", "description": "temp", "version": "1.0.0"}
     body = "# Temp\nsteps"
     (skill_dir / "SKILL.md").write_text(
-        "---\n" + __import__("yaml").safe_dump(fm, sort_keys=False) + "---\n\n" + body, encoding="utf-8"
+        "---\n" + __import__("yaml").safe_dump(fm, sort_keys=False) + "---\n\n" + body,
+        encoding="utf-8",
     )
     name = install_skill(rt.registry, str(skill_dir), rt.settings)
     assert name == "temp-skill"
@@ -326,7 +366,10 @@ def test_parse_skill_md_no_frontmatter():
 
 def test_dump_skill_md_roundtrip():
     rec = SkillRecord(
-        id="test@1.0.0", name="test", path=Path("/tmp/x"), version="1.0.0",
+        id="test@1.0.0",
+        name="test",
+        path=Path("/tmp/x"),
+        version="1.0.0",
         frontmatter={"name": "test", "description": "a test", "version": "1.0.0"},
         body="# Test\n\ndo stuff",
         status="candidate",

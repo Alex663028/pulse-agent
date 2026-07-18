@@ -3,6 +3,7 @@
 Provides a lightweight StubProvider that does not make API calls.
 For real integration testing, set PULSE_TEST_API_KEY and use provider="openai".
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -42,8 +43,11 @@ class StubProvider(LLMProvider):
         **kwargs,
     ) -> LLMResponse:
         import re
+
         self.calls.append(list(messages))
-        last_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
+        last_user = next(
+            (m.content for m in reversed(messages) if m.role == "user"), ""
+        )
         if self._scripted:
             return self._scripted.pop(0)
         if tools:
@@ -52,24 +56,34 @@ class StubProvider(LLMProvider):
                 self._last_tool = m.group(1)
                 return LLMResponse(
                     content="",
-                    tool_calls=[ToolCall(id="call_1", name=m.group(1), arguments={"query": last_user})],
+                    tool_calls=[
+                        ToolCall(
+                            id="call_1", name=m.group(1), arguments={"query": last_user}
+                        )
+                    ],
                     model=self.model,
                 )
         answer = f"Acknowledged: {last_user[:120]}"
         return LLMResponse(
             content=answer,
             model=self.model,
-            usage=Usage(prompt_tokens=len(last_user) // 4, completion_tokens=len(answer) // 4),
+            usage=Usage(
+                prompt_tokens=len(last_user) // 4, completion_tokens=len(answer) // 4
+            ),
         )
 
     def add_scripted_response(self, response: LLMResponse) -> None:
         self._scripted.append(response)
 
 
-def make_runtime(tmp_path: Path, provider: str = "stub", model: str = "stub-1") -> Runtime:
+def make_runtime(
+    tmp_path: Path, provider: str = "stub", model: str = "stub-1"
+) -> Runtime:
     """Build a test runtime with StubProvider (no API calls)."""
     settings = Settings(config_dir=tmp_path, data_dir=tmp_path / "data")
-    settings.model = ModelSettings(provider="openai", model=model, base_url="http://localhost:9999/v1")
+    settings.model = ModelSettings(
+        provider="openai", model=model, base_url="http://localhost:9999/v1"
+    )
     storage = Storage(settings.db_path)
     memory = MemoryStore(settings, storage)
     registry = SkillRegistry(settings, storage)
@@ -79,13 +93,29 @@ def make_runtime(tmp_path: Path, provider: str = "stub", model: str = "stub-1") 
     # Create stub provider directly instead of via build_router
     stub = StubProvider(model=model)
     from pulse.llm.router import Router
+
     router = Router(primary=stub, fallbacks=[])
 
     obs = Observability()
-    orch = Orchestrator(router, memory, registry, tools, storage, settings, obs, config=OrchestratorConfig(auto_evolve=True))
+    orch = Orchestrator(
+        router,
+        memory,
+        registry,
+        tools,
+        storage,
+        settings,
+        obs,
+        config=OrchestratorConfig(auto_evolve=True),
+    )
     return Runtime(
-        settings=settings, storage=storage, memory=memory, registry=registry,
-        tools=tools, router=router, obs=obs, orchestrator=orch,
+        settings=settings,
+        storage=storage,
+        memory=memory,
+        registry=registry,
+        tools=tools,
+        router=router,
+        obs=obs,
+        orchestrator=orch,
     )
 
 
@@ -102,7 +132,10 @@ def flaky_provider(failures: int = 2, model: str = "stub-1"):
             self._n += 1
             if self._n <= self._failures:
                 from pulse.llm.provider import LLMError
+
                 raise LLMError("503 Service Unavailable (transient)")
-            return super().chat(messages, tools=tools, tool_choice=tool_choice, **kwargs)
+            return super().chat(
+                messages, tools=tools, tool_choice=tool_choice, **kwargs
+            )
 
     return Flaky()

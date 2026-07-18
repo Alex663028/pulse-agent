@@ -5,6 +5,7 @@ self-hosted heuristic: pull explicit self-descriptions from conversation turns
 and append them to USER.md. Later milestones can upgrade this to a proper
 dialectic-lite model without changing the storage contract.
 """
+
 from __future__ import annotations
 
 import re

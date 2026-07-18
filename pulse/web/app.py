@@ -1,4 +1,5 @@
 """Web UI server with modern frontend (Flask + React SPA)."""
+
 from __future__ import annotations
 
 import logging
@@ -222,30 +223,44 @@ def create_web_app(rt: Runtime | None = None) -> Any:
 
     @app.route("/api/status")
     def status():
-        return jsonify({
-            "provider": _rt.settings.model.provider,
-            "model": _rt.settings.model.model,
-            "sessions": len(_rt.storage.sessions_map) if hasattr(_rt.storage, 'sessions_map') else 0,
-            "tools": len(_rt.tools.allowed_names),
-        })
+        return jsonify(
+            {
+                "provider": _rt.settings.model.provider,
+                "model": _rt.settings.model.model,
+                "sessions": len(_rt.storage.sessions_map)
+                if hasattr(_rt.storage, "sessions_map")
+                else 0,
+                "tools": len(_rt.tools.allowed_names),
+            }
+        )
 
     @app.route("/api/sessions", methods=["GET"])
     def list_sessions():
-        sessions = _rt.storage.list_sessions() if hasattr(_rt.storage, 'list_sessions') else []
+        sessions = (
+            _rt.storage.list_sessions() if hasattr(_rt.storage, "list_sessions") else []
+        )
         return jsonify(sessions)
 
     @app.route("/api/sessions/<session_id>", methods=["DELETE"])
     def delete_session(session_id):
-        if hasattr(_rt.storage, 'delete_session'):
+        if hasattr(_rt.storage, "delete_session"):
             _rt.storage.delete_session(session_id)
         return jsonify({"ok": True})
 
     @app.route("/api/tools")
     def list_tools():
-        return jsonify([
-            {"name": n, "description": _rt.tools.get(n).description if _rt.tools.get(n) else "", "enabled": True}
-            for n in _rt.tools.allowed_names
-        ])
+        return jsonify(
+            [
+                {
+                    "name": n,
+                    "description": _rt.tools.get(n).description
+                    if _rt.tools.get(n)
+                    else "",
+                    "enabled": True,
+                }
+                for n in _rt.tools.allowed_names
+            ]
+        )
 
     @app.route("/api/chat", methods=["POST"])
     def chat():
@@ -256,18 +271,29 @@ def create_web_app(rt: Runtime | None = None) -> Any:
             return jsonify({"error": "empty message"}), 400
         try:
             res = _rt.orchestrator.run(msg, session_id=sid)
-            return jsonify({
-                "session_id": res.session_id,
-                "answer": res.answer,
-                "trace_id": res.trace_id,
-                "success": res.success,
-            })
+            return jsonify(
+                {
+                    "session_id": res.session_id,
+                    "answer": res.answer,
+                    "trace_id": res.trace_id,
+                    "success": res.success,
+                }
+            )
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
     @app.route("/api/skills")
     def list_skills():
-        return jsonify([{"name": r["name"], "status": r["status"], "version": r.get("version", "?")} for r in _rt.registry.list()])
+        return jsonify(
+            [
+                {
+                    "name": r["name"],
+                    "status": r["status"],
+                    "version": r.get("version", "?"),
+                }
+                for r in _rt.registry.list()
+            ]
+        )
 
     return app
 

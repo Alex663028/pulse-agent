@@ -1,4 +1,5 @@
 """Async-compatible LLM provider wrapper."""
+
 from __future__ import annotations
 
 import asyncio
@@ -37,7 +38,11 @@ class AsyncLLMProvider:
     ) -> LLMResponse:
         """Async chat — runs the sync chat() in a thread pool."""
         return await asyncio.to_thread(
-            self._provider.chat, messages, tools=tools, tool_choice=tool_choice, **kwargs
+            self._provider.chat,
+            messages,
+            tools=tools,
+            tool_choice=tool_choice,
+            **kwargs,
         )
 
     def sync_chat(
@@ -48,7 +53,9 @@ class AsyncLLMProvider:
         **kwargs: Any,
     ) -> LLMResponse:
         """Synchronous fallback."""
-        return self._provider.chat(messages, tools=tools, tool_choice=tool_choice, **kwargs)
+        return self._provider.chat(
+            messages, tools=tools, tool_choice=tool_choice, **kwargs
+        )
 
 
 __all__ = ["AsyncLLMProvider"]

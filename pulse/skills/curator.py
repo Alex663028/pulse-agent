@@ -3,6 +3,7 @@
 Tracks usage, marks idle skills stale, archives stale ones, keeps a pre-run
 tar.gz backup so nothing is lost. Only touches skills with agent provenance.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SkillUsage:
     """Usage statistics for a single skill."""
+
     name: str
     use_count: int = 0
     view_count: int = 0
@@ -49,7 +51,9 @@ class SkillCurator:
     Only touches skills with created_by="agent" (not bundled or hub-installed).
     """
 
-    def __init__(self, skills_dir: Path, stale_after_days: int = 30, archive_after_days: int = 60) -> None:
+    def __init__(
+        self, skills_dir: Path, stale_after_days: int = 30, archive_after_days: int = 60
+    ) -> None:
         self.skills_dir = Path(skills_dir)
         self.stale_after_days = stale_after_days
         self.archive_after_days = archive_after_days
@@ -77,7 +81,9 @@ class SkillCurator:
 
     def touch(self, name: str, action: str = "use") -> None:
         """Record skill activity."""
-        usage = self._usage.setdefault(name, SkillUsage(name=name, created_at=time.time()))
+        usage = self._usage.setdefault(
+            name, SkillUsage(name=name, created_at=time.time())
+        )
         if action == "use":
             usage.use_count += 1
             usage.last_activity_at = time.time()

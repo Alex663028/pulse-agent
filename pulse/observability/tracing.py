@@ -2,6 +2,7 @@
 
 Trace viewer, debugging, and export for LLM calls, tool executions, and agent runs.
 """
+
 from __future__ import annotations
 
 import json
@@ -68,7 +69,9 @@ class TraceStore:
 class LangSmithTracer:
     """LangSmith-compatible trace exporter."""
 
-    def __init__(self, api_key: str = "", endpoint: str = "https://api.smith.langchain.com") -> None:
+    def __init__(
+        self, api_key: str = "", endpoint: str = "https://api.smith.langchain.com"
+    ) -> None:
         self.api_key = api_key
         self.endpoint = endpoint.rstrip("/")
         self._enabled = bool(api_key)
@@ -95,7 +98,12 @@ class LangSmithTracer:
 class LangFuseTracer:
     """LangFuse-compatible trace exporter."""
 
-    def __init__(self, public_key: str = "", secret_key: str = "", host: str = "https://cloud.langfuse.com") -> None:
+    def __init__(
+        self,
+        public_key: str = "",
+        secret_key: str = "",
+        host: str = "https://cloud.langfuse.com",
+    ) -> None:
         self.public_key = public_key
         self.secret_key = secret_key
         self.host = host.rstrip("/")

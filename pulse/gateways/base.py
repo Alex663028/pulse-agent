@@ -8,6 +8,7 @@ together with ``pulse serve``.
 Scheduler is NOT a Gateway — it operates on its own background thread and
 runs cron-triggered tasks without waiting for user input.
 """
+
 from __future__ import annotations
 
 import logging
@@ -52,7 +53,9 @@ class GatewayManager:
         self._running = True
         self._stop_event.clear()
         for gw in self.gateways:
-            t = threading.Thread(target=gw.start, args=(runtime,), daemon=True, name=gw.name)
+            t = threading.Thread(
+                target=gw.start, args=(runtime,), daemon=True, name=gw.name
+            )
             t.start()
             self._threads.append(t)
 

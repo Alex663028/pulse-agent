@@ -19,6 +19,7 @@ Tool spec format (YAML):
 Python script format:
     Create a .py file with a `run(**kwargs) -> str` function.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,6 +42,7 @@ CUSTOM_TOOLS_DIR = Path.home() / ".pulse" / "tools"
 @dataclass
 class ToolSpec:
     """Definition of a custom tool loaded from config."""
+
     name: str
     description: str
     parameters: dict[str, Any] = field(default_factory=dict)
@@ -90,7 +92,10 @@ class ShellTool(Tool):
             )
             output = result.stdout.strip()
             if result.returncode != 0:
-                return ToolResult(ok=False, error=f"exit {result.returncode}: {output or result.stderr.strip()}")
+                return ToolResult(
+                    ok=False,
+                    error=f"exit {result.returncode}: {output or result.stderr.strip()}",
+                )
             return ToolResult(ok=True, output=output or "(no output)")
         except subprocess.TimeoutExpired:
             return ToolResult(ok=False, error=f"timeout after {self._timeout}s")
@@ -120,7 +125,9 @@ class ScriptTool(Tool):
                 timeout=self._timeout,
             )
             if result.returncode != 0:
-                return ToolResult(ok=False, error=f"exit {result.returncode}: {result.stderr.strip()}")
+                return ToolResult(
+                    ok=False, error=f"exit {result.returncode}: {result.stderr.strip()}"
+                )
             output = result.stdout.strip()
             return ToolResult(ok=True, output=output or "(no output)")
         except subprocess.TimeoutExpired:
@@ -240,5 +247,8 @@ def list_custom_tool_specs() -> list[str]:
     """Return names of all custom tool config files found."""
     if not CUSTOM_TOOLS_DIR.exists():
         return []
-    return [e.stem for e in sorted(CUSTOM_TOOLS_DIR.iterdir())
-            if e.suffix in (".yaml", ".yml", ".json", ".py")]
+    return [
+        e.stem
+        for e in sorted(CUSTOM_TOOLS_DIR.iterdir())
+        if e.suffix in (".yaml", ".yml", ".json", ".py")
+    ]

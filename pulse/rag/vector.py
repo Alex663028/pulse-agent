@@ -5,6 +5,7 @@ Backends:
 - chromadb: optional chromadb package
 - qdrant: optional qdrant-client package
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,7 +36,9 @@ class VectorStore:
     to SQLite FTS5 keyword search so RAG still works out-of-the-box.
     """
 
-    def upsert(self, doc_id: str, text: str, metadata: Optional[dict[str, Any]] = None) -> None:
+    def upsert(
+        self, doc_id: str, text: str, metadata: Optional[dict[str, Any]] = None
+    ) -> None:
         raise NotImplementedError
 
     def search(self, query: str, limit: int = 5) -> list[Hit]:
@@ -48,7 +51,9 @@ class SQLiteVectorStore(VectorStore):
     def __init__(self, storage: Storage) -> None:
         self.storage = storage
 
-    def upsert(self, doc_id: str, text: str, metadata: Optional[dict[str, Any]] = None) -> None:
+    def upsert(
+        self, doc_id: str, text: str, metadata: Optional[dict[str, Any]] = None
+    ) -> None:
         self.storage.index_memory(f"rag:{doc_id}", text)
 
     def search(self, query: str, limit: int = 5) -> list[Hit]:
@@ -70,7 +75,9 @@ class ChromaVectorStore(VectorStore):
     def __init__(self, collection: Any) -> None:
         self._col = collection
 
-    def upsert(self, doc_id: str, text: str, metadata: Optional[dict[str, Any]] = None) -> None:
+    def upsert(
+        self, doc_id: str, text: str, metadata: Optional[dict[str, Any]] = None
+    ) -> None:
         self._col.add(documents=[text], ids=[doc_id], metadatas=[metadata or {}])
 
     def search(self, query: str, limit: int = 5) -> list[Hit]:
@@ -95,13 +102,20 @@ class QdrantVectorStore(VectorStore):
         self._client = client
         self._collection = collection
 
-    def upsert(self, doc_id: str, text: str, metadata: Optional[dict[str, Any]] = None) -> None:
+    def upsert(
+        self, doc_id: str, text: str, metadata: Optional[dict[str, Any]] = None
+    ) -> None:
         try:
             from qdrant_client.http import models  # type: ignore
+
             self._client.upsert(
                 collection_name=self._collection,
                 points=[
-                    models.PointStruct(id=doc_id, payload={"text": text, **(metadata or {})}, vector=[0.0])
+                    models.PointStruct(
+                        id=doc_id,
+                        payload={"text": text, **(metadata or {})},
+                        vector=[0.0],
+                    )
                 ],
             )
         except Exception as e:
@@ -109,8 +123,17 @@ class QdrantVectorStore(VectorStore):
 
     def search(self, query: str, limit: int = 5) -> list[Hit]:
         try:
-            res = self._client.search(collection_name=self._collection, query_vector=[0.0], limit=limit)
-            return [Hit(doc_id=str(r.id), content=r.payload.get("text", ""), score=float(r.score or 0.0)) for r in res]
+            res = self._client.search(
+                collection_name=self._collection, query_vector=[0.0], limit=limit
+            )
+            return [
+                Hit(
+                    doc_id=str(r.id),
+                    content=r.payload.get("text", ""),
+                    score=float(r.score or 0.0),
+                )
+                for r in res
+            ]
         except Exception as e:
             logger.warning("qdrant search failed: %s", e)
             return []

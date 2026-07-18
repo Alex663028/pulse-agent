@@ -8,6 +8,7 @@ The agent can:
 
 This is the core "self-improving" loop that distinguishes Pulse from vanilla agents.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EvolutionSignal:
     """A signal detected from runtime analysis that may trigger evolution."""
+
     kind: str  # "repeated_failure", "correction_pattern", "tool_gap", "prompt_drift", "skill_regression"
     source: str  # module/skill/tool that triggered this
     description: str
@@ -45,6 +47,7 @@ class EvolutionSignal:
 @dataclass
 class EvolutionProposal:
     """A concrete proposal for self-improvement."""
+
     title: str
     description: str
     action: str  # "improve_skill", "add_tool", "refine_prompt", "fix_bug", "add_skill"
@@ -105,13 +108,15 @@ class EvolutionAnalyzer:
 
         for tool, count in tool_failure_counts.items():
             if count >= 3:
-                signals.append(EvolutionSignal(
-                    kind="repeated_failure",
-                    source=f"tool:{tool}",
-                    description=f"Tool '{tool}' failed {count} times in recent trajectories",
-                    evidence={"tool": tool, "failure_count": count},
-                    confidence=min(0.9, 0.3 + count * 0.1),
-                ))
+                signals.append(
+                    EvolutionSignal(
+                        kind="repeated_failure",
+                        source=f"tool:{tool}",
+                        description=f"Tool '{tool}' failed {count} times in recent trajectories",
+                        evidence={"tool": tool, "failure_count": count},
+                        confidence=min(0.9, 0.3 + count * 0.1),
+                    )
+                )
 
         return signals
 
@@ -125,13 +130,18 @@ class EvolutionAnalyzer:
                 action = step.get("action", "")
                 if not step.get("outcome", True) and action.startswith("tool:"):
                     tool_name = action[5:]
-                    signals.append(EvolutionSignal(
-                        kind="tool_gap",
-                        source=f"tool:{tool_name}",
-                        description=f"Tool '{tool_name}' failed: {step.get('detail', 'unknown')}",
-                        evidence={"tool": tool_name, "detail": step.get("detail", "")},
-                        confidence=0.5,
-                    ))
+                    signals.append(
+                        EvolutionSignal(
+                            kind="tool_gap",
+                            source=f"tool:{tool_name}",
+                            description=f"Tool '{tool_name}' failed: {step.get('detail', 'unknown')}",
+                            evidence={
+                                "tool": tool_name,
+                                "detail": step.get("detail", ""),
+                            },
+                            confidence=0.5,
+                        )
+                    )
         return signals
 
     def _analyze_skill_gaps(self) -> list[EvolutionSignal]:
@@ -149,13 +159,15 @@ class EvolutionAnalyzer:
 
         for pattern, count in task_patterns.items():
             if count >= 5:
-                signals.append(EvolutionSignal(
-                    kind="skill_gap",
-                    source=f"task:{pattern}",
-                    description=f"Task pattern '{pattern}' appeared {count} times — candidate for a new skill",
-                    evidence={"pattern": pattern, "count": count},
-                    confidence=min(0.85, 0.4 + count * 0.05),
-                ))
+                signals.append(
+                    EvolutionSignal(
+                        kind="skill_gap",
+                        source=f"task:{pattern}",
+                        description=f"Task pattern '{pattern}' appeared {count} times — candidate for a new skill",
+                        evidence={"pattern": pattern, "count": count},
+                        confidence=min(0.85, 0.4 + count * 0.05),
+                    )
+                )
 
         return signals
 
@@ -168,13 +180,18 @@ class EvolutionAnalyzer:
             data = safe_parse_json(t.get("data"))
             traj = data.get("trajectory", [])
             if len(traj) > 15:
-                signals.append(EvolutionSignal(
-                    kind="prompt_drift",
-                    source="orchestrator",
-                    description=f"Trajectory had {len(traj)} steps — possible prompt inefficiency",
-                    evidence={"steps": len(traj), "session": t.get("session_id", "")},
-                    confidence=0.4,
-                ))
+                signals.append(
+                    EvolutionSignal(
+                        kind="prompt_drift",
+                        source="orchestrator",
+                        description=f"Trajectory had {len(traj)} steps — possible prompt inefficiency",
+                        evidence={
+                            "steps": len(traj),
+                            "session": t.get("session_id", ""),
+                        },
+                        confidence=0.4,
+                    )
+                )
 
         return signals
 

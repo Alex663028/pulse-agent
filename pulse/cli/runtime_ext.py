@@ -1,4 +1,5 @@
 """Runtime extensions: optional RAG + trace/LangSmith/LangFuse wiring."""
+
 from __future__ import annotations
 
 import logging
@@ -42,7 +43,9 @@ def apply_extensions(rt) -> None:
         ext.trace_store = TraceStore(max_traces=5000)
         if getattr(settings, "langsmith_api_key", ""):
             ext.langsmith = LangSmithTracer(api_key=settings.langsmith_api_key)
-        if getattr(settings, "langfuse_public_key", "") and getattr(settings, "langfuse_secret_key", ""):
+        if getattr(settings, "langfuse_public_key", "") and getattr(
+            settings, "langfuse_secret_key", ""
+        ):
             ext.langfuse = LangFuseTracer(
                 public_key=settings.langfuse_public_key,
                 secret_key=settings.langfuse_secret_key,

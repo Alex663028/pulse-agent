@@ -1,4 +1,5 @@
 """Tests for pulse/net.py - HTTP utilities."""
+
 from __future__ import annotations
 
 

@@ -1,4 +1,5 @@
 """Skills subcommands: list / install / eval / promote / rollback."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -32,6 +33,7 @@ def _est(text: str) -> int:
 
 def default_runner(rt: Runtime):
     """Build a default ``Runner`` that evaluates a skill by chatting with ``rt.router``."""
+
     def run(skill, task: str) -> RunOutcome:
         try:
             resp = rt.router.chat(
@@ -40,7 +42,11 @@ def default_runner(rt: Runtime):
                     LLMMessage(role="user", content=task),
                 ]
             )
-            return RunOutcome(success=bool(resp.content.strip()), tokens=resp.usage.total or _est(resp.content), steps=1)
+            return RunOutcome(
+                success=bool(resp.content.strip()),
+                tokens=resp.usage.total or _est(resp.content),
+                steps=1,
+            )
         except (RuntimeError, OSError, ValueError):
             return RunOutcome(success=False, tokens=0, steps=1)
 
@@ -51,7 +57,9 @@ def cmd_list(rt: Runtime) -> None:
     """Print the table of registered skills."""
     rows = rt.registry.list()
     if not rows:
-        console.print("[yellow]No skills found. Install one or run a task to evolve one.[/yellow]")
+        console.print(
+            "[yellow]No skills found. Install one or run a task to evolve one.[/yellow]"
+        )
         return
     t = Table(title="Skills")
     t.add_column("name")
@@ -69,7 +77,9 @@ def cmd_install(rt: Runtime, location: str) -> None:
     console.print(f"[green]✓ Installed skill:[/green] {name}")
 
 
-def cmd_eval(rt: Runtime, name: str, golden: Optional[str], baseline: Optional[str]) -> None:
+def cmd_eval(
+    rt: Runtime, name: str, golden: Optional[str], baseline: Optional[str]
+) -> None:
     """Evaluate ``name`` against golden tasks (optional ``baseline``), apply the decision and print the report."""
     rec = rt.registry.get(name)
     if not rec:
@@ -77,18 +87,34 @@ def cmd_eval(rt: Runtime, name: str, golden: Optional[str], baseline: Optional[s
         return
     tasks = BUILTIN_GOLDEN
     if golden and Path(golden).exists():
-        tasks = [line.strip() for line in Path(golden).read_text(encoding="utf-8").splitlines() if line.strip()]
+        tasks = [
+            line.strip()
+            for line in Path(golden).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
     base_rec = rt.registry.get(baseline) if baseline else None
     evaluator = SkillEvaluator(rt.registry)
     result = evaluator.evaluate(rec, default_runner(rt), tasks, base_rec)
     evaluator.apply(result, rec)
     console.print(f"\n[bold]Eval:[/bold] {name}")
-    console.print(f"  runs={result.runs}  success_rate={result.success_rate:.2f}  "
-                  f"avg_tokens={result.avg_tokens:.0f}  avg_steps={result.avg_steps:.1f}")
+    console.print(
+        f"  runs={result.runs}  success_rate={result.success_rate:.2f}  "
+        f"avg_tokens={result.avg_tokens:.0f}  avg_steps={result.avg_steps:.1f}"
+    )
     if result.baseline_success_rate is not None:
-        console.print(f"  baseline={result.baseline_success_rate:.2f}  delta={result.delta_success:+.2f}")
-    color = {"promote": "green", "quarantine": "yellow", "rollback": "red", "deprecate": "red", "refine": "cyan"}[result.decision]
-    console.print(f"  [bold {color}]decision: {result.decision}[/bold {color}] — {result.reason}")
+        console.print(
+            f"  baseline={result.baseline_success_rate:.2f}  delta={result.delta_success:+.2f}"
+        )
+    color = {
+        "promote": "green",
+        "quarantine": "yellow",
+        "rollback": "red",
+        "deprecate": "red",
+        "refine": "cyan",
+    }[result.decision]
+    console.print(
+        f"  [bold {color}]decision: {result.decision}[/bold {color}] — {result.reason}"
+    )
 
 
 def cmd_promote(rt: Runtime, name: str) -> None:
@@ -106,6 +132,8 @@ def cmd_rollback(rt: Runtime, name: str, to_version: Optional[str]) -> None:
     """Roll the skill ``name`` back to ``to_version`` (or the latest promoted) and print the result."""
     rec = do_rollback(rt.registry, name, to_version)
     if rec:
-        console.print(f"[green]✓ Rolled back:[/green] {name} -> {rec.version} (status=promoted)")
+        console.print(
+            f"[green]✓ Rolled back:[/green] {name} -> {rec.version} (status=promoted)"
+        )
     else:
         console.print(f"[red]No version to roll back to for[/red] {name}")

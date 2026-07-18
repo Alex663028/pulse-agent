@@ -1,4 +1,5 @@
 """Tests for storage/lock.py - optimistic locking."""
+
 from __future__ import annotations
 
 from pulse.storage.lock import with_optimistic_lock

@@ -5,6 +5,7 @@ OpenAI-compatible model) and a ``run`` method. Tool calls are wrapped by the
 orchestrator's recovery layer, so a failing tool is isolated and retried
 rather than aborting the whole task.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -50,7 +51,11 @@ class ReadFileTool(Tool):
 
     name = "read_file"
     description = "Read a text file from the local filesystem. Args: path."
-    parameters = {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}
+    parameters = {
+        "type": "object",
+        "properties": {"path": {"type": "string"}},
+        "required": ["path"],
+    }
 
     def run(self, path: str = "", **kwargs: Any) -> ToolResult:
         """Read up to 4000 chars from ``path``; returns ok=False if missing."""
@@ -59,7 +64,9 @@ class ReadFileTool(Tool):
         p = Path(path)
         if not p.exists():
             return ToolResult(ok=False, error=f"no such file: {path}")
-        return ToolResult(ok=True, output=p.read_text(encoding="utf-8", errors="replace")[:4000])
+        return ToolResult(
+            ok=True, output=p.read_text(encoding="utf-8", errors="replace")[:4000]
+        )
 
 
 @dataclass
@@ -68,7 +75,11 @@ class ListDirTool(Tool):
 
     name = "list_dir"
     description = "List files in a directory. Args: path."
-    parameters = {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}
+    parameters = {
+        "type": "object",
+        "properties": {"path": {"type": "string"}},
+        "required": ["path"],
+    }
 
     def run(self, path: str = ".", **kwargs: Any) -> ToolResult:
         """Return a newline-sorted listing of ``path``."""
@@ -87,14 +98,24 @@ class CalcTool(Tool):
 
     name = "calc"
     description = "Evaluate a simple arithmetic expression safely. Args: expr."
-    parameters = {"type": "object", "properties": {"expr": {"type": "string"}}, "required": ["expr"]}
+    parameters = {
+        "type": "object",
+        "properties": {"expr": {"type": "string"}},
+        "required": ["expr"],
+    }
 
     def run(self, expr: str = "", **kwargs: Any) -> ToolResult:
         """Evaluate ``expr`` (numbers and + - * / only) via AST, returning the result."""
         import ast
         import operator as op
 
-        ops = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul, ast.Div: op.truediv, ast.USub: op.neg}
+        ops = {
+            ast.Add: op.add,
+            ast.Sub: op.sub,
+            ast.Mult: op.mul,
+            ast.Div: op.truediv,
+            ast.USub: op.neg,
+        }
         try:
             node = ast.parse(expr, mode="eval").body
 

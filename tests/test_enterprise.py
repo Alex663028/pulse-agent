@@ -1,9 +1,15 @@
 """Tests for enterprise features: audit logging, RBAC/ABAC, SSO."""
+
 from __future__ import annotations
 
 
 from pulse.enterprise import (
-    AuditEntry, AuditLogger, AuthManager, Permission, USERS, SSOProvider,
+    AuditEntry,
+    AuditLogger,
+    AuthManager,
+    Permission,
+    USERS,
+    SSOProvider,
 )
 
 
@@ -11,8 +17,11 @@ class TestAuditLogger:
     def test_log_and_query(self, tmp_path):
         al = AuditLogger(tmp_path / "audit")
         entry = AuditEntry(
-            timestamp=1000.0, user_id="admin", action="skill:promote",
-            resource="my-skill", result="success",
+            timestamp=1000.0,
+            user_id="admin",
+            action="skill:promote",
+            resource="my-skill",
+            result="success",
         )
         al.log(entry)
         results = al.query()
@@ -21,8 +30,24 @@ class TestAuditLogger:
 
     def test_filter_by_user(self, tmp_path):
         al = AuditLogger(tmp_path / "audit")
-        al.log(AuditEntry(timestamp=1.0, user_id="admin", action="a", resource="r", result="success"))
-        al.log(AuditEntry(timestamp=2.0, user_id="viewer", action="a", resource="r", result="success"))
+        al.log(
+            AuditEntry(
+                timestamp=1.0,
+                user_id="admin",
+                action="a",
+                resource="r",
+                result="success",
+            )
+        )
+        al.log(
+            AuditEntry(
+                timestamp=2.0,
+                user_id="viewer",
+                action="a",
+                resource="r",
+                result="success",
+            )
+        )
         assert len(al.query(user_id="admin")) == 1
 
 

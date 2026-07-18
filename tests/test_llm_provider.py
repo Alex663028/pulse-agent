@@ -1,4 +1,5 @@
 """Tests for LLM provider module."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -110,8 +111,10 @@ class TestOpenAICompatProvider:
     def test_chat_calls_execute(self):
         """chat() calls _execute_payload."""
         provider = OpenAICompatProvider(base_url="http://localhost/v1")
-        with patch.object(provider, "_execute_payload") as mock_exec, \
-             patch.object(provider, "_parse_response") as mock_parse:
+        with (
+            patch.object(provider, "_execute_payload") as mock_exec,
+            patch.object(provider, "_parse_response") as mock_parse,
+        ):
             mock_exec.return_value = MagicMock()
             mock_parse.return_value = LLMResponse(content="test")
             result = provider.chat([LLMMessage(role="user", content="hi")])

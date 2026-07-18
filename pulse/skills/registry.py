@@ -5,6 +5,7 @@ Sources: bundled starters (shipped with Pulse), user-installed skills
 only name+description are loaded at startup (~100 tokens); the full SKILL.md
 body is read on demand.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -45,12 +46,20 @@ class SkillRegistry:
                         continue
                     last = self.storage.latest_eval(f"{rec.name}@{rec.version}")
                     if last:
-                        rec.status = DECISION_TO_STATUS.get(last.get("decision"), rec.status)
+                        rec.status = DECISION_TO_STATUS.get(
+                            last.get("decision"), rec.status
+                        )
                     self._index[rec.name] = rec
 
     def list(self) -> list[dict]:
         return [
-            {"name": r.name, "title": r.title, "description": r.description, "status": r.status, "version": r.version}
+            {
+                "name": r.name,
+                "title": r.title,
+                "description": r.description,
+                "status": r.status,
+                "version": r.version,
+            }
             for r in self._index.values()
         ]
 
@@ -65,12 +74,15 @@ class SkillRegistry:
             dest = self.settings.skills_dir / record.name
             if not dest.exists():
                 import shutil
+
                 shutil.copytree(record.path, dest)
                 record = load_skill_dir(dest)
         self._index[record.name] = record
         return record
 
-    def update_status(self, name: str, status: SkillStatus, metrics: Optional[dict] = None) -> None:
+    def update_status(
+        self, name: str, status: SkillStatus, metrics: Optional[dict] = None
+    ) -> None:
         rec = self._index.get(name)
         if not rec:
             return

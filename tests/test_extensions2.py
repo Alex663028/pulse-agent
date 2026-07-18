@@ -1,4 +1,5 @@
 """Tests for RAG vector backends and RL training stubs."""
+
 from __future__ import annotations
 
 import json
@@ -27,7 +28,11 @@ class TestSQLiteVectorStore:
 class TestChromaVectorStore:
     def test_upsert_and_search(self):
         col = MagicMock()
-        col.query.return_value = {"documents": [["hello"]], "ids": [["d1"]], "distances": [[0.1]]}
+        col.query.return_value = {
+            "documents": [["hello"]],
+            "ids": [["d1"]],
+            "distances": [[0.1]],
+        }
         store = ChromaVectorStore(col)
         store.upsert("d1", "hello")
         hits = store.search("hello", limit=1)
@@ -44,7 +49,9 @@ class TestChromaVectorStore:
 class TestQdrantVectorStore:
     def test_upsert_and_search(self):
         client = MagicMock()
-        client.search.return_value = [MagicMock(id="d1", payload={"text": "hello"}, score=0.8)]
+        client.search.return_value = [
+            MagicMock(id="d1", payload={"text": "hello"}, score=0.8)
+        ]
         store = QdrantVectorStore(client, collection="c")
         store.upsert("d1", "hello")
         hits = store.search("q", limit=1)
@@ -80,7 +87,9 @@ class TestRLTrainer:
     def test_add_and_flush(self, tmp_path):
         storage = MagicMock()
         trainer = RLTrainer(storage, out_dir=tmp_path)
-        trainer.add_sample(RewardSample(session_id="s1", prompt="p", response="r", reward=1.0))
+        trainer.add_sample(
+            RewardSample(session_id="s1", prompt="p", response="r", reward=1.0)
+        )
         path = trainer.flush()
         assert path.exists()
         with path.open("r", encoding="utf-8") as f:
@@ -103,7 +112,10 @@ class TestBackfillRewards:
     def test_backfill_count(self, tmp_path):
         rt = make_runtime(tmp_path)
         rt.storage.log_trajectory(
-            tid="t1", session_id="s1", outcome=True, used_skills=["search"],
+            tid="t1",
+            session_id="s1",
+            outcome=True,
+            used_skills=["search"],
             data={"task": "q", "answer": "a"},
         )
         count = backfill_rewards(rt.storage, limit=10)

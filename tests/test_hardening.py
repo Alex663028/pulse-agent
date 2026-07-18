@@ -1,4 +1,5 @@
 """Regression tests for P0/P1 hardening in pulse."""
+
 from __future__ import annotations
 
 import secrets
@@ -50,7 +51,9 @@ def test_recovery_no_last_after_exhaustion():
     def always_fail():
         raise ValueError("boom")
 
-    policy = RetryPolicy(max_attempts=1, base_delay=0.0, jitter=0.0, sleep=lambda s: None)
+    policy = RetryPolicy(
+        max_attempts=1, base_delay=0.0, jitter=0.0, sleep=lambda s: None
+    )
     try:
         guarded(always_fail, policy=policy)
     except RecoveryError as exc:
@@ -62,12 +65,19 @@ def test_recovery_no_last_after_exhaustion():
 
 def test_recovery_exhausted_retries():
     """After exhausting retries, guarded should raise RecoveryError."""
-    from pulse.orchestrator.recovery import ErrorClass, RecoveryError, RetryPolicy, guarded
+    from pulse.orchestrator.recovery import (
+        ErrorClass,
+        RecoveryError,
+        RetryPolicy,
+        guarded,
+    )
 
     def always_fail():
         raise ValueError("boom")
 
-    policy = RetryPolicy(max_attempts=2, base_delay=0.0, jitter=0.0, sleep=lambda s: None)
+    policy = RetryPolicy(
+        max_attempts=2, base_delay=0.0, jitter=0.0, sleep=lambda s: None
+    )
 
     # Patch classify to TRANSIENT so guarded retries until exhaustion
     import pulse.orchestrator.recovery as rec
@@ -92,9 +102,11 @@ def test_recovery_exhausted_retries():
 def test_open_uses_context_manager():
     """Verify cli/main.py uses with open() for cron loading."""
     source = (
-        Path(__file__).resolve().parents[1]
+        Path(__file__)
+        .resolve()
+        .parents[1]
         .joinpath("pulse/cli/main.py")
         .read_text(encoding="utf-8")
     )
     assert "json.loads(open(" not in source
-    assert 'with open(' in source
+    assert "with open(" in source

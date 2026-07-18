@@ -4,6 +4,7 @@ Reliability improvement: every skill activation, tool call, error and token
 tick is emitted as a structured event, so failures are replayable and
 ``pulse doctor`` can pinpoint what went wrong.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,7 +26,10 @@ class Event:
 
     def to_json(self) -> str:
         """Serialize the event (plus its data payload) to a single JSON line."""
-        return json.dumps({"ts": self.ts, "trace_id": self.trace_id, "kind": self.kind, **self.data}, ensure_ascii=False)
+        return json.dumps(
+            {"ts": self.ts, "trace_id": self.trace_id, "kind": self.kind, **self.data},
+            ensure_ascii=False,
+        )
 
 
 class Observability:
@@ -35,7 +39,12 @@ class Observability:
     in long-running services (``pulse serve``).
     """
 
-    def __init__(self, trace_id: Optional[str] = None, logger: Optional[logging.Logger] = None, max_events: int = 5000):
+    def __init__(
+        self,
+        trace_id: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
+        max_events: int = 5000,
+    ):
         self.trace_id = trace_id or uuid.uuid4().hex[:12]
         self.events: list[Event] = []
         self._log = logger or logging.getLogger("pulse")
@@ -47,7 +56,7 @@ class Observability:
         ev = Event(ts=time.time(), trace_id=self.trace_id, kind=kind, data=data)
         self.events.append(ev)
         if len(self.events) > self._max_events:
-            self.events = self.events[-self._max_events:]
+            self.events = self.events[-self._max_events :]
         self._log.debug(ev.to_json())
         # Optional trace export for LangSmith/LangFuse
         try:
@@ -56,25 +65,33 @@ class Observability:
                 ts = getattr(ext, "trace_store", None)
                 if ts is not None:
                     from pulse.observability.tracing import Trace
-                    ts.record(Trace(
-                        trace_id=self.trace_id,
-                        span_id=uuid.uuid4().hex[:12],
-                        name=kind,
-                        kind=kind,
-                        data=data,
-                    ))
-                for tracer in (getattr(ext, "langsmith", None), getattr(ext, "langfuse", None)):
+
+                    ts.record(
+                        Trace(
+                            trace_id=self.trace_id,
+                            span_id=uuid.uuid4().hex[:12],
+                            name=kind,
+                            kind=kind,
+                            data=data,
+                        )
+                    )
+                for tracer in (
+                    getattr(ext, "langsmith", None),
+                    getattr(ext, "langfuse", None),
+                ):
                     if tracer is not None:
                         try:
-                            tracer.export([
-                                Trace(
-                                    trace_id=self.trace_id,
-                                    span_id=uuid.uuid4().hex[:12],
-                                    name=kind,
-                                    kind=kind,
-                                    data=data,
-                                )
-                            ])
+                            tracer.export(
+                                [
+                                    Trace(
+                                        trace_id=self.trace_id,
+                                        span_id=uuid.uuid4().hex[:12],
+                                        name=kind,
+                                        kind=kind,
+                                        data=data,
+                                    )
+                                ]
+                            )
                         except Exception:
                             pass
         except Exception:

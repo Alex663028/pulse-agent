@@ -1,4 +1,5 @@
 """MCP integration tests: client, tool adapter, manager, and CLI commands."""
+
 from __future__ import annotations
 
 import os
@@ -100,7 +101,9 @@ def test_manager_handles_bad_server():
     reg = ToolRegistry()
     mgr = MCPManager(reg)
     # command that does not exist should be skipped gracefully
-    cfg = MCPServerConfig(name="broken", command="this_command_does_not_exist_xyz", args=[], enabled=True)
+    cfg = MCPServerConfig(
+        name="broken", command="this_command_does_not_exist_xyz", args=[], enabled=True
+    )
     n = mgr.load_servers([cfg])
     assert n == 0
     mgr.shutdown()
@@ -108,14 +111,23 @@ def test_manager_handles_bad_server():
 
 def test_settings_persist_mcp_servers(tmp_path):
     s = Settings(config_dir=tmp_path)
-    s.mcp_servers.append(MCPServerConfig(name="fs", command="npx", args=["-y", "@modelcontextprotocol/server-filesystem"]))
+    s.mcp_servers.append(
+        MCPServerConfig(
+            name="fs",
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-filesystem"],
+        )
+    )
     from pulse.config.settings import save_settings, load_settings
 
     save_settings(s)
     reloaded = load_settings(tmp_path)
     assert len(reloaded.mcp_servers) == 1
     assert reloaded.mcp_servers[0].name == "fs"
-    assert reloaded.mcp_servers[0].args == ["-y", "@modelcontextprotocol/server-filesystem"]
+    assert reloaded.mcp_servers[0].args == [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+    ]
 
 
 def test_cli_mcp_add_and_list(tmp_path):
@@ -160,7 +172,9 @@ def test_load_settings_preserves_config_dir(tmp_path):
     from pulse.config.settings import load_settings, save_settings
 
     s = Settings(config_dir=tmp_path)
-    s.mcp_servers.append(MCPServerConfig(name="demo", command="python", args=["-m", "mock"]))
+    s.mcp_servers.append(
+        MCPServerConfig(name="demo", command="python", args=["-m", "mock"])
+    )
     save_settings(s)
 
     reloaded = load_settings(tmp_path)
@@ -188,8 +202,12 @@ def test_doctor_reports_mcp_tools(tmp_path):
     from pulse.cli.doctor import run_doctor
 
     s = Settings(config_dir=tmp_path)
-    s.mcp_servers.append(MCPServerConfig(name="mock", command=PY, args=[FIXTURE], enabled=True))
-    s.mcp_servers.append(MCPServerConfig(name="off", command="npx", args=["-y", "x"], enabled=False))
+    s.mcp_servers.append(
+        MCPServerConfig(name="mock", command=PY, args=[FIXTURE], enabled=True)
+    )
+    s.mcp_servers.append(
+        MCPServerConfig(name="off", command="npx", args=["-y", "x"], enabled=False)
+    )
     from pulse.config.settings import load_settings, save_settings
 
     save_settings(s)
@@ -217,7 +235,9 @@ def test_cli_mcp_add_parses_quoted_invocation(tmp_path):
     )
     assert result.exit_code == 0, result.output
     servers = load_settings(tmp_path).mcp_servers
-    assert any(s.name == "fs" and s.command == "npx" and "-y" in s.args for s in servers)
+    assert any(
+        s.name == "fs" and s.command == "npx" and "-y" in s.args for s in servers
+    )
 
 
 def test_validate_tool_args():
@@ -291,7 +311,9 @@ def test_probe_server():
     assert n == 2
     assert "tool" in detail
 
-    bad = MCPServerConfig(name="bad", command="this_command_does_not_exist_xyz", args=[], enabled=True)
+    bad = MCPServerConfig(
+        name="bad", command="this_command_does_not_exist_xyz", args=[], enabled=True
+    )
     ok, n, detail = probe_server(bad, timeout=5.0)
     assert ok is False
     assert n == 0

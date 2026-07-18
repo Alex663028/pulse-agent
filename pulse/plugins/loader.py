@@ -135,7 +135,7 @@ class PluginLoader:
         """
         self.discover()
         activated: list[str] = []
-        for name in (names or list(self.plugins.keys())):
+        for name in names or list(self.plugins.keys()):
             info = self.plugins.get(name)
             if not info or not info.enabled:
                 continue

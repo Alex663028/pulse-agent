@@ -4,6 +4,7 @@ Supports installing from a local directory (path) or a git repository URL.
 This is how Pulse reuses the existing agentskills.io / Hermes skill ecosystem
 without forking it.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -24,13 +25,21 @@ def install_skill(registry: SkillRegistry, location: str, settings: Settings) ->
     else:
         # treat as a git URL
         parsed = urlparse(location)
-        if parsed.scheme in ("http", "https", "git", "ssh") or location.endswith(".git"):
+        if parsed.scheme in ("http", "https", "git", "ssh") or location.endswith(
+            ".git"
+        ):
             with tempfile.TemporaryDirectory() as tmp:
-                subprocess.run(["git", "clone", "--depth", "1", location, tmp + "/repo"], check=True, capture_output=True)
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", location, tmp + "/repo"],
+                    check=True,
+                    capture_output=True,
+                )
                 # find the skill dir (one containing SKILL.md) at repo root or one level down
                 skill_dir = _find_skill_dir(Path(tmp) / "repo")
                 if not skill_dir:
-                    raise FileNotFoundError(f"no SKILL.md found in cloned repo {location}")
+                    raise FileNotFoundError(
+                        f"no SKILL.md found in cloned repo {location}"
+                    )
                 dest_name = skill_dir.name
                 dest = settings.skills_dir / dest_name
                 if dest.exists():

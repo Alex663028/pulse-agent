@@ -1,11 +1,17 @@
 """Tests for RAG pipeline and tracing extensions."""
+
 from __future__ import annotations
 
 import json
 from unittest.mock import MagicMock, patch
 
 
-from pulse.observability.tracing import LangFuseTracer, LangSmithTracer, Trace, TraceStore
+from pulse.observability.tracing import (
+    LangFuseTracer,
+    LangSmithTracer,
+    Trace,
+    TraceStore,
+)
 from pulse.rag.pipeline import Document, RAGPipeline
 from pulse.rag.vector import SQLiteVectorStore
 from pulse.storage.engine import Storage
@@ -135,6 +141,7 @@ class TestRuntimeExtensions:
         rt.settings.rag_enabled = False
         rt.settings.trace_enabled = False
         from pulse.cli.runtime_ext import apply_extensions
+
         apply_extensions(rt)
         assert rt.ext.rag is None
         assert rt.ext.trace_store is None
@@ -147,6 +154,7 @@ class TestRuntimeExtensions:
         rt.settings.rag_overlap = 10
         rt.settings.trace_enabled = False
         from pulse.cli.runtime_ext import apply_extensions
+
         apply_extensions(rt)
         assert rt.ext.rag is not None
 
@@ -158,6 +166,7 @@ class TestRuntimeExtensions:
         rt.settings.langfuse_public_key = ""
         rt.settings.langfuse_secret_key = ""
         from pulse.cli.runtime_ext import apply_extensions
+
         apply_extensions(rt)
         assert rt.ext.trace_store is not None
         assert rt.ext.langsmith is not None

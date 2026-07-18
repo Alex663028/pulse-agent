@@ -1,4 +1,5 @@
 """Tests for core tools: WebSearchTool, WebFetchTool, FileEditTool, PythonExecTool, ShellExecTool, HttpClientTool."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -119,7 +120,10 @@ class TestPythonExecTool:
         tool = PythonExecTool()
         result = tool.run("import time; time.sleep(60)", timeout=1)
         assert result.ok is False
-        assert "timeout" in result.output.lower() or "timeout" in (result.error or "").lower()
+        assert (
+            "timeout" in result.output.lower()
+            or "timeout" in (result.error or "").lower()
+        )
 
 
 class TestShellExecTool:

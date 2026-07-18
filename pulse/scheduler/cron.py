@@ -7,6 +7,7 @@ Supports:
 - Job pause/resume
 - Execution history persisted to SQLite
 """
+
 from __future__ import annotations
 
 import re
@@ -108,6 +109,7 @@ def _daily_at(h: int, m: int) -> float:
     target = now.replace(hour=h, minute=m, second=0, microsecond=0)
     if target <= now:
         from datetime import timedelta
+
         target += timedelta(days=1)
     return max(1.0, (target - now).total_seconds())
 
@@ -125,7 +127,10 @@ _NL_PATTERNS = [
     (r"every\s+(\d+)\s*sec", lambda m: int(m.group(1))),
     (r"hourly", lambda m: 3600),
     (r"daily(?:\s*at\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?)?", _parse_daily),
-    (r"every\s+morning\s*(?:at\s*(\d{1,2}))?", lambda m: _daily_at(int(m.group(1) or 8), 0)),
+    (
+        r"every\s+morning\s*(?:at\s*(\d{1,2}))?",
+        lambda m: _daily_at(int(m.group(1) or 8), 0),
+    ),
 ]
 
 
@@ -150,9 +155,17 @@ class Scheduler:
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
 
-    def add(self, name: str, interval: float, fn: Callable[[], None], cron_expr: str = "") -> Job:
+    def add(
+        self, name: str, interval: float, fn: Callable[[], None], cron_expr: str = ""
+    ) -> Job:
         """Register a job to fire every ``interval`` seconds (or per ``cron_expr``); returns the Job."""
-        job = Job(name=name, interval=interval, fn=fn, cron_expr=cron_expr, last_run=time.time())
+        job = Job(
+            name=name,
+            interval=interval,
+            fn=fn,
+            cron_expr=cron_expr,
+            last_run=time.time(),
+        )
         with self._lock:
             self._jobs[name] = job
         return job
@@ -197,7 +210,9 @@ class Scheduler:
             return
         self._active = True
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._loop, daemon=True, name="pulse-scheduler")
+        self._thread = threading.Thread(
+            target=self._loop, daemon=True, name="pulse-scheduler"
+        )
         self._thread.start()
 
     def stop(self) -> None:
@@ -227,7 +242,11 @@ class Scheduler:
                             continue
                         # cron: only fire once per matching minute
                         last_dt = datetime.fromtimestamp(job.last_run)
-                        if last_dt.minute == dt.minute and last_dt.hour == dt.hour and last_dt.day == dt.day:
+                        if (
+                            last_dt.minute == dt.minute
+                            and last_dt.hour == dt.hour
+                            and last_dt.day == dt.day
+                        ):
                             continue
                         job.last_run = now
                         job.runs += 1
@@ -244,7 +263,22 @@ class Scheduler:
         t0 = time.time()
         try:
             job.fn()
-            self._history.append(JobRun(job_name=job.name, started=t0, elapsed=time.time() - t0, success=True))
+            self._history.append(
+                JobRun(
+                    job_name=job.name,
+                    started=t0,
+                    elapsed=time.time() - t0,
+                    success=True,
+                )
+            )
         except Exception as e:
             job.failures += 1
-            self._history.append(JobRun(job_name=job.name, started=t0, elapsed=time.time() - t0, success=False, error=str(e)))
+            self._history.append(
+                JobRun(
+                    job_name=job.name,
+                    started=t0,
+                    elapsed=time.time() - t0,
+                    success=False,
+                    error=str(e),
+                )
+            )

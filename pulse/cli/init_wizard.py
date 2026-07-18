@@ -4,6 +4,7 @@ Minimizes questions: defaults to a fully local Ollama setup, auto-detects a
 running Ollama, and only asks for an API key when a cloud provider is chosen.
 This is the UX fix for Hermes' steep onboarding curve.
 """
+
 from __future__ import annotations
 
 
@@ -74,9 +75,17 @@ def run_init(
         if _ollama_reachable(base):
             console.print("[green]✓ Detected a server at[/green] " + base)
         else:
-            console.print("[yellow]! No server detected at[/yellow] " + base + " — make sure it's reachable before chatting.")
+            console.print(
+                "[yellow]! No server detected at[/yellow] "
+                + base
+                + " — make sure it's reachable before chatting."
+            )
         ms.base_url = base
-        ms.model = model or Prompt.ask("Model", default=DEFAULT_MODEL) if not non_interactive else (model or DEFAULT_MODEL)
+        ms.model = (
+            model or Prompt.ask("Model", default=DEFAULT_MODEL)
+            if not non_interactive
+            else (model or DEFAULT_MODEL)
+        )
         settings.api_key_env = ""
     else:
         if base_url:
@@ -91,14 +100,22 @@ def run_init(
             if k:
                 _write_env(settings, key_env, k)
         settings.api_key_env = key_env
-        ms.model = model or Prompt.ask("Model", default=DEFAULT_MODEL) if not non_interactive else (model or DEFAULT_MODEL)
+        ms.model = (
+            model or Prompt.ask("Model", default=DEFAULT_MODEL)
+            if not non_interactive
+            else (model or DEFAULT_MODEL)
+        )
 
     save_settings(settings)
-    console.print(f"\n[bold green]✓ Pulse configured at[/bold green] {settings.config_dir / 'config.yaml'}")
+    console.print(
+        f"\n[bold green]✓ Pulse configured at[/bold green] {settings.config_dir / 'config.yaml'}"
+    )
     if provider == "ollama":
-        console.print("  Run [bold]pulse chat \"hello\"[/bold] to talk to your local model.")
+        console.print(
+            '  Run [bold]pulse chat "hello"[/bold] to talk to your local model.'
+        )
     else:
-        console.print("  Run [bold]pulse chat \"hello\"[/bold] once your API key is set.")
+        console.print('  Run [bold]pulse chat "hello"[/bold] once your API key is set.')
     return settings
 
 

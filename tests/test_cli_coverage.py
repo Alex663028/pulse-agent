@@ -1,4 +1,5 @@
 """Tests for CLI-level logic: doctor, settings, skills_cli, init_wizard internals."""
+
 from __future__ import annotations
 
 import uuid
@@ -7,8 +8,21 @@ from pathlib import Path
 
 from pulse.cli.doctor import run_doctor
 from pulse.cli.init_wizard import run_init
-from pulse.cli.skills_cli import cmd_list, cmd_eval, cmd_promote, cmd_rollback, default_runner, BUILTIN_GOLDEN
-from pulse.config.settings import Settings, ModelSettings, load_settings, save_settings, load_env
+from pulse.cli.skills_cli import (
+    cmd_list,
+    cmd_eval,
+    cmd_promote,
+    cmd_rollback,
+    default_runner,
+    BUILTIN_GOLDEN,
+)
+from pulse.config.settings import (
+    Settings,
+    ModelSettings,
+    load_settings,
+    save_settings,
+    load_env,
+)
 from pulse.skills.loader import SkillRecord
 from tests._helpers import make_runtime
 
@@ -38,7 +52,9 @@ def test_doctor_returns_list_of_namedtuples():
 def test_settings_save_load_roundtrip():
     d = Path("/tmp") / f"pulse_set_{uuid.uuid4().hex}"
     s = Settings(config_dir=d)
-    s.model = ModelSettings(provider="openai", model="gpt-4o", base_url="https://api.openai.com/v1")
+    s.model = ModelSettings(
+        provider="openai", model="gpt-4o", base_url="https://api.openai.com/v1"
+    )
     s.api_key_env = "OPENAI_API_KEY"
     save_settings(s)
     assert (d / "config.yaml").exists()
@@ -72,7 +88,7 @@ def test_settings_derived_paths():
 def test_load_env_reads_file():
     d = Path("/tmp") / f"pulse_set4_{uuid.uuid4().hex}"
     d.mkdir(parents=True, exist_ok=True)
-    (d / ".env").write_text('OPENAI_API_KEY=sk-test123\n# comment\nEMPTY=\n')
+    (d / ".env").write_text("OPENAI_API_KEY=sk-test123\n# comment\nEMPTY=\n")
     s = Settings(config_dir=d)
     env = load_env(s)
     assert env["OPENAI_API_KEY"] == "sk-test123"
@@ -90,7 +106,12 @@ def test_run_init_ollama_custom_base_url(tmp_path, monkeypatch):
 
     monkeypatch.setattr(init_wizard, "_ollama_reachable", lambda base: True)
     s = Settings(config_dir=tmp_path)
-    out = run_init(s, provider="ollama", base_url="https://my-ollama.example.com/v1", non_interactive=True)
+    out = run_init(
+        s,
+        provider="ollama",
+        base_url="https://my-ollama.example.com/v1",
+        non_interactive=True,
+    )
     assert out.model.base_url == "https://my-ollama.example.com/v1"
     assert out.model.provider == "ollama"
     # persists and reloads with the custom base url
@@ -103,7 +124,9 @@ def test_run_init_cloud_custom_base_url(tmp_path, monkeypatch):
 
     monkeypatch.setattr(init_wizard, "_ollama_reachable", lambda base: True)
     s = Settings(config_dir=tmp_path)
-    out = run_init(s, provider="openai", base_url="https://gw.example.com/v1", non_interactive=True)
+    out = run_init(
+        s, provider="openai", base_url="https://gw.example.com/v1", non_interactive=True
+    )
     assert out.model.base_url == "https://gw.example.com/v1"
     assert out.api_key_env == "OPENAI_API_KEY"
 
@@ -128,8 +151,11 @@ def test_cmd_eval_promote():
     rt = make_runtime(Path("/tmp") / f"pulse_sc2_{uuid.uuid4().hex}")
     # create a candidate skill manually
     cand = SkillRecord(
-        id="test-cand@0.1.0", name="test-cand", path=Path("/tmp/x"),
-        version="0.1.0", status="candidate",
+        id="test-cand@0.1.0",
+        name="test-cand",
+        path=Path("/tmp/x"),
+        version="0.1.0",
+        status="candidate",
         frontmatter={"name": "test-cand", "description": "test", "version": "0.1.0"},
         body="do the thing",
     )
@@ -137,7 +163,10 @@ def test_cmd_eval_promote():
     cmd_eval(rt, "test-cand", golden=None, baseline=None)
     # after eval, status should have changed
     rec = rt.registry.get("test-cand")
-    assert rec.status in ("promoted", "candidate", "quarantined", "deprecated", "refine") or True
+    assert (
+        rec.status in ("promoted", "candidate", "quarantined", "deprecated", "refine")
+        or True
+    )
 
 
 def test_cmd_eval_not_found(capsys):
@@ -163,8 +192,12 @@ def test_default_runner():
     rt = make_runtime(Path("/tmp") / f"pulse_sc6_{uuid.uuid4().hex}")
     runner = default_runner(rt)
     skill = SkillRecord(
-        id="s@1", name="s", path=Path("/tmp"), version="1",
-        frontmatter={"name": "s", "description": "d"}, body="do something",
+        id="s@1",
+        name="s",
+        path=Path("/tmp"),
+        version="1",
+        frontmatter={"name": "s", "description": "d"},
+        body="do something",
     )
     result = runner(skill, "test task")
     assert hasattr(result, "success")

@@ -1,4 +1,5 @@
 """Usage analytics and insights for the agent."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -13,6 +14,7 @@ from pulse.storage.engine import Storage
 @dataclass
 class UsageStats:
     """Aggregated usage statistics."""
+
     total_sessions: int = 0
     total_trajectories: int = 0
     total_tokens: int = 0
@@ -34,17 +36,23 @@ class UsageInsights:
     def compute_stats(self, days: int = 30) -> UsageStats:
         """Compute usage statistics for the last N days."""
         stats = UsageStats()
-        cutoff = (datetime.now(timezone.utc).timestamp() - days * 86400)
+        cutoff = datetime.now(timezone.utc).timestamp() - days * 86400
 
         # Session stats
-        sessions = self.storage.list_sessions() if hasattr(self.storage, "list_sessions") else []
+        sessions = (
+            self.storage.list_sessions()
+            if hasattr(self.storage, "list_sessions")
+            else []
+        )
         stats.total_sessions = len(sessions)
         for s in sessions:
             stats.total_tokens += s.get("token_usage", 0)
 
         # Trajectory stats
         trajectories = self.storage.query_trajectories(limit=10000)
-        recent = [t for t in trajectories if self._parse_ts(t.get("created_at", "")) > cutoff]
+        recent = [
+            t for t in trajectories if self._parse_ts(t.get("created_at", "")) > cutoff
+        ]
         stats.total_trajectories = len(recent)
         stats.success_count = sum(1 for t in recent if t.get("outcome") == 1)
         stats.failure_count = sum(1 for t in recent if t.get("outcome") == 0)
@@ -86,7 +94,9 @@ class UsageInsights:
         ]
         if stats.skills_used:
             lines.append("Top skills:")
-            for name, count in sorted(stats.skills_used.items(), key=lambda x: -x[1])[:5]:
+            for name, count in sorted(stats.skills_used.items(), key=lambda x: -x[1])[
+                :5
+            ]:
                 lines.append(f"  {name}: {count} uses")
         return "\n".join(lines)
 

@@ -1,4 +1,5 @@
 """End-to-end tests — run the full stack through realistic scenarios."""
+
 from __future__ import annotations
 
 import pytest
@@ -46,6 +47,7 @@ def orchestrator(stub_settings):
 
     # Create stub provider directly
     from tests._helpers import StubProvider
+
     provider = StubProvider(model="stub-1")
     router = Router(primary=provider)
     obs = Observability()
@@ -130,6 +132,7 @@ class TestNewToolsBuiltin:
 
     def test_calc_tool(self, orchestrator):
         from pulse.tools.base import CalcTool
+
         tool = CalcTool()
         result = tool.run(expr="2 + 3 * 4")
         assert result.ok
@@ -138,6 +141,7 @@ class TestNewToolsBuiltin:
     def test_web_fetch_tool_mock(self, orchestrator):
         """Web fetch should retry or fail gracefully on network error."""
         from pulse.tools.core import WebFetchTool
+
         tool = WebFetchTool()
         # Use an unreachable URL
         result = tool.run(url="http://127.0.0.1:1/max_chars=10")
@@ -146,6 +150,7 @@ class TestNewToolsBuiltin:
 
     def test_python_exec_tool(self, orchestrator):
         from pulse.tools.core import PythonExecTool
+
         tool = PythonExecTool()
         result = tool.run(code="print(42)")
         if result.ok:
@@ -153,6 +158,7 @@ class TestNewToolsBuiltin:
 
     def test_write_file_tool(self, orchestrator, tmp_path):
         from pulse.tools.core import WriteFileTool
+
         tool = WriteFileTool()
         f = tmp_path / "test.txt"
         result = tool.run(path=str(f), content="hello")
@@ -161,6 +167,7 @@ class TestNewToolsBuiltin:
 
     def test_edit_file_tool(self, orchestrator, tmp_path):
         from pulse.tools.core import EditFileTool
+
         tool = EditFileTool()
         f = tmp_path / "test2.txt"
         f.write_text("hello world")

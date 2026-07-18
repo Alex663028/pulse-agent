@@ -1,4 +1,5 @@
 """Tests for CLI main commands and Runtime bootstrap."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -152,7 +153,9 @@ class TestCliCron:
             cron_file = tmp_path / "cron_jobs.json"
             cron_file.write_text("{}")
 
-            result = runner.invoke(app, ["cron", "add", "--name", "test-job", "test task", "60"])
+            result = runner.invoke(
+                app, ["cron", "add", "--name", "test-job", "test task", "60"]
+            )
             assert result.exit_code == 0
             result = runner.invoke(app, ["cron", "remove", "test-job"])
             assert result.exit_code == 0
@@ -257,8 +260,10 @@ class TestCliMcp:
         from pulse.cli.main import app
 
         runner = CliRunner()
-        with patch("pulse.cli.mcp_cli.cmd_list") as mock_cmd, \
-             patch("pulse.config.settings.load_settings") as mock_ls:
+        with (
+            patch("pulse.cli.mcp_cli.cmd_list") as mock_cmd,
+            patch("pulse.config.settings.load_settings") as mock_ls,
+        ):
             mock_ls.return_value = MagicMock()
             result = runner.invoke(app, ["mcp", "list"])
             assert result.exit_code == 0
@@ -269,11 +274,15 @@ class TestCliMcp:
         from pulse.cli.main import app
 
         runner = CliRunner()
-        with patch("pulse.cli.mcp_cli.cmd_add") as mock_add, \
-             patch("pulse.cli.mcp_cli.cmd_remove") as mock_remove, \
-             patch("pulse.config.settings.load_settings") as mock_ls:
+        with (
+            patch("pulse.cli.mcp_cli.cmd_add") as mock_add,
+            patch("pulse.cli.mcp_cli.cmd_remove") as mock_remove,
+            patch("pulse.config.settings.load_settings") as mock_ls,
+        ):
             mock_ls.return_value = MagicMock()
-            result = runner.invoke(app, ["mcp", "add", "test-server", "npx -y some-server"])
+            result = runner.invoke(
+                app, ["mcp", "add", "test-server", "npx -y some-server"]
+            )
             assert result.exit_code == 0
             mock_add.assert_called_once()
             result = runner.invoke(app, ["mcp", "remove", "test-server"])

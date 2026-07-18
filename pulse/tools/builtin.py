@@ -1,4 +1,5 @@
 """Register all built-in tools (core + original three)."""
+
 from __future__ import annotations
 
 from pulse.tools.base import CalcTool, ListDirTool, ReadFileTool

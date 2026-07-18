@@ -2,6 +2,7 @@
 
 Supports English (en) and Chinese (zh). Add more languages by adding entries to MESSAGES.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,13 +23,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "confirm": "Confirm",
         "loading": "Loading...",
         "no_data": "No data available",
-
         # Chat
         "chat_placeholder": "Type a message...",
         "chat_send": "Send",
         "chat_thinking": "Thinking...",
         "chat_error": "An error occurred while processing your request.",
-
         # Skills
         "skill_list": "Skills",
         "skill_install": "Install Skill",
@@ -39,25 +38,21 @@ MESSAGES: dict[str, dict[str, str]] = {
         "skill_promoted": "Promoted",
         "skill_quarantined": "Quarantined",
         "skill_deprecated": "Deprecated",
-
         # Memory
         "memory_recall": "Recall Memory",
         "memory_add": "Add Note",
         "memory_profile": "User Profile",
-
         # Settings
         "settings_title": "Settings",
         "settings_provider": "Provider",
         "settings_model": "Model",
         "settings_save": "Save Settings",
-
         # Auth
         "auth_login": "Log In",
         "auth_logout": "Log Out",
         "auth_username": "Username",
         "auth_password": "Password",
         "auth_permission_denied": "Permission Denied",
-
         # Audit
         "audit_log": "Audit Log",
         "audit_user": "User",
@@ -65,7 +60,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "audit_resource": "Resource",
         "audit_result": "Result",
         "audit_time": "Time",
-
         # Self-evolution
         "evolve_title": "Self-Evolution",
         "evolve_analyze": "Analyze Patterns",
@@ -85,13 +79,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "confirm": "确认",
         "loading": "加载中...",
         "no_data": "暂无数据",
-
         # Chat
         "chat_placeholder": "输入消息...",
         "chat_send": "发送",
         "chat_thinking": "思考中...",
         "chat_error": "处理请求时发生错误。",
-
         # Skills
         "skill_list": "技能列表",
         "skill_install": "安装技能",
@@ -102,25 +94,21 @@ MESSAGES: dict[str, dict[str, str]] = {
         "skill_promoted": "已晋升",
         "skill_quarantined": "已隔离",
         "skill_deprecated": "已废弃",
-
         # Memory
         "memory_recall": "回忆记忆",
         "memory_add": "添加笔记",
         "memory_profile": "用户画像",
-
         # Settings
         "settings_title": "设置",
         "settings_provider": "服务商",
         "settings_model": "模型",
         "settings_save": "保存设置",
-
         # Auth
         "auth_login": "登录",
         "auth_logout": "注销",
         "auth_username": "用户名",
         "auth_password": "密码",
         "auth_permission_denied": "权限不足",
-
         # Audit
         "audit_log": "审计日志",
         "audit_user": "用户",
@@ -128,7 +116,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "audit_resource": "资源",
         "audit_result": "结果",
         "audit_time": "时间",
-
         # Self-evolution
         "evolve_title": "自我进化",
         "evolve_analyze": "分析模式",

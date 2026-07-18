@@ -1,4 +1,5 @@
 """Core orchestration loop."""
+
 from __future__ import annotations
 
 import logging
@@ -22,7 +23,6 @@ from pulse.storage.engine import Storage
 from pulse.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
-
 
 
 def _est(text: str) -> int:
@@ -125,42 +125,65 @@ class Orchestrator:
             return f"[safety] tool '{name}' will modify filesystem, args={dict(list(args.items())[:3])}"
         return None
 
-    def _compact_messages(self, messages: list[LLMMessage], keep_tokens: int) -> list[LLMMessage]:
+    def _compact_messages(
+        self, messages: list[LLMMessage], keep_tokens: int
+    ) -> list[LLMMessage]:
         keep_n = 6
         if len(messages) <= keep_n:
             return messages
-        kept = messages[:1] + messages[-(keep_n - 1):]
-        older_messages = messages[1:-keep_n + 1] if len(messages) > keep_n else messages[1:]
+        kept = messages[:1] + messages[-(keep_n - 1) :]
+        older_messages = (
+            messages[1 : -keep_n + 1] if len(messages) > keep_n else messages[1:]
+        )
         older_text = "\n".join(m.content for m in older_messages if m.content)
         if not older_text:
             return kept
         if self.router.primary:
             try:
-                resp = self.router.chat([
-                    LLMMessage(role="system", content="Summarize the following conversation history into a concise brief. Keep key decisions, tool results, and facts. Be brief."),
-                    LLMMessage(role="user", content=older_text[:8000]),
-                ], max_tokens=keep_tokens // 4)
-                summary = resp.content or f"[summarized {len(older_messages)} older messages]"
+                resp = self.router.chat(
+                    [
+                        LLMMessage(
+                            role="system",
+                            content="Summarize the following conversation history into a concise brief. Keep key decisions, tool results, and facts. Be brief.",
+                        ),
+                        LLMMessage(role="user", content=older_text[:8000]),
+                    ],
+                    max_tokens=keep_tokens // 4,
+                )
+                summary = (
+                    resp.content or f"[summarized {len(older_messages)} older messages]"
+                )
             except Exception:
                 summary = f"[summarized {len(older_messages)} older messages]"
         else:
             summary = f"[summarized {len(older_messages)} older messages]"
-        return [kept[0], LLMMessage(role="user", content="[context compacted]\n" + summary), *kept[1:]]
+        return [
+            kept[0],
+            LLMMessage(role="user", content="[context compacted]\n" + summary),
+            *kept[1:],
+        ]
 
     def _total_tokens(self, messages: list[LLMMessage]) -> int:
-        return sum(_est(m.content) + sum(_est(str(tc.arguments)) for tc in m.tool_calls) for m in messages)
+        return sum(
+            _est(m.content) + sum(_est(str(tc.arguments)) for tc in m.tool_calls)
+            for m in messages
+        )
 
     def run(self, task: str, session_id: Optional[str] = None) -> TaskResult:
         """Run a task to completion and return TaskResult."""
         sid = session_id or f"sess:{uuid4().hex[:12]}"
         return self._run_internal(task, sid, use_streaming=False)
 
-    def run_stream(self, task: str, session_id: Optional[str] = None) -> Iterator[LLMResponse]:
+    def run_stream(
+        self, task: str, session_id: Optional[str] = None
+    ) -> Iterator[LLMResponse]:
         """Run a task with streaming responses (yields chunks)."""
         sid = session_id or f"sess:{uuid4().hex[:12]}"
         yield from self._run_internal_streaming(task, sid)
 
-    def _run_internal(self, task: str, sid: str, use_streaming: bool = False) -> TaskResult:
+    def _run_internal(
+        self, task: str, sid: str, use_streaming: bool = False
+    ) -> TaskResult:
         self._last_task = task
         self.obs.emit("session_start", session=sid, task=task[:200])
         self.storage.index_memory(sid, task)
@@ -177,11 +200,20 @@ class Orchestrator:
 
         for step in range(self.config.max_iterations):
             if budget.over_soft:
-                messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
+                messages = self._compact_messages(
+                    messages, keep_tokens=self.settings.max_session_tokens // 4
+                )
             try:
-                resp = guarded(self.router.chat, messages, tools=tool_schemas or None, allow=(ErrorClass.TRANSIENT,))
+                resp = guarded(
+                    self.router.chat,
+                    messages,
+                    tools=tool_schemas or None,
+                    allow=(ErrorClass.TRANSIENT,),
+                )
             except CtxOverflowError:
-                messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
+                messages = self._compact_messages(
+                    messages, keep_tokens=self.settings.max_session_tokens // 4
+                )
                 continue
             except Exception as e:
                 self.obs.error(classify(e), str(e))
@@ -189,13 +221,17 @@ class Orchestrator:
                 return result
 
             budget.reserve(resp.usage.total or _est(resp.content))
-            self.obs.token_usage(resp.usage.prompt_tokens, resp.usage.completion_tokens, budget.used)
+            self.obs.token_usage(
+                resp.usage.prompt_tokens, resp.usage.completion_tokens, budget.used
+            )
 
             if resp.tool_calls:
                 messages, result = self._handle_tool_calls(messages, resp, result, sid)
                 continue
 
-            return self._finalize_success(messages, resp, result, skills, sid, budget, task)
+            return self._finalize_success(
+                messages, resp, result, skills, sid, budget, task
+            )
 
         result.error = "max iterations reached without a final answer"
         return result
@@ -206,12 +242,17 @@ class Orchestrator:
         except Exception:
             return []
 
-    def _initial_messages(self, sid: str, system_content: str, task: str) -> list[LLMMessage]:
+    def _initial_messages(
+        self, sid: str, system_content: str, task: str
+    ) -> list[LLMMessage]:
         with self._session_lock:
             history = self._session_histories.get(sid)
         if history is not None:
             return history + [LLMMessage(role="user", content=task)]
-        return [LLMMessage(role="system", content=system_content), LLMMessage(role="user", content=task)]
+        return [
+            LLMMessage(role="system", content=system_content),
+            LLMMessage(role="user", content=task),
+        ]
 
     def _handle_tool_calls(
         self,
@@ -220,13 +261,26 @@ class Orchestrator:
         result: TaskResult,
         sid: str,
     ) -> tuple[list[LLMMessage], TaskResult]:
-        messages.append(LLMMessage(role="assistant", content=resp.content, tool_calls=resp.tool_calls))
+        messages.append(
+            LLMMessage(
+                role="assistant", content=resp.content, tool_calls=resp.tool_calls
+            )
+        )
         for tc in resp.tool_calls:
             self._confirm_if_dangerous(tc.name, tc.arguments)
             r = self.tools.call(tc.name, tc.arguments)
             self.obs.tool_called(tc.name, r.ok, r.error or "")
-            result.trajectory.append({"action": f"tool:{tc.name}", "detail": tc.arguments, "outcome": r.ok})
-            messages.append(LLMMessage(role="tool", name=tc.name, tool_call_id=tc.id, content=r.output or r.error or ""))
+            result.trajectory.append(
+                {"action": f"tool:{tc.name}", "detail": tc.arguments, "outcome": r.ok}
+            )
+            messages.append(
+                LLMMessage(
+                    role="tool",
+                    name=tc.name,
+                    tool_call_id=tc.id,
+                    content=r.output or r.error or "",
+                )
+            )
         return messages, result
 
     def _finalize_success(
@@ -246,17 +300,35 @@ class Orchestrator:
         messages.append(LLMMessage(role="assistant", content=resp.content))
         with self._session_lock:
             self._session_histories[sid] = messages
-        self.storage.store_session(sid, summary=resp.content[:200], token_usage=budget.used)
+        self.storage.store_session(
+            sid, summary=resp.content[:200], token_usage=budget.used
+        )
         self.storage.log_trajectory(
-            tid=f"traj:{uuid4().hex[:10]}", session_id=sid, outcome=True,
+            tid=f"traj:{uuid4().hex[:10]}",
+            session_id=sid,
+            outcome=True,
             used_skills=result.used_skills,
-            data={"task": task, "trajectory": result.trajectory, "answer": resp.content},
+            data={
+                "task": task,
+                "trajectory": result.trajectory,
+                "answer": resp.content,
+            },
         )
         if self.config.auto_evolve and len(result.trajectory) >= 3:
-            tool_actions = {t.get("action", "") for t in result.trajectory if t.get("action")}
+            tool_actions = {
+                t.get("action", "") for t in result.trajectory if t.get("action")
+            }
             if len(tool_actions) >= 2:
-                steps = [t["detail"].get("query") or t["action"] for t in result.trajectory]
-                rec = propose_skill(task, [str(s) for s in steps], self.settings.skills_dir, llm=self.router.primary, registry=self.registry)
+                steps = [
+                    t["detail"].get("query") or t["action"] for t in result.trajectory
+                ]
+                rec = propose_skill(
+                    task,
+                    [str(s) for s in steps],
+                    self.settings.skills_dir,
+                    llm=self.router.primary,
+                    registry=self.registry,
+                )
                 self.registry.register(rec)
                 result.candidate_skill = rec.name
                 self.obs.emit("skill_proposed", skill=rec.name)
@@ -285,9 +357,13 @@ class Orchestrator:
 
         for step in range(self.config.max_iterations):
             if budget.over_soft:
-                messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
+                messages = self._compact_messages(
+                    messages, keep_tokens=self.settings.max_session_tokens // 4
+                )
             try:
-                for chunk in self.router.primary.chat_stream(messages, tools=tool_schemas or None):
+                for chunk in self.router.primary.chat_stream(
+                    messages, tools=tool_schemas or None
+                ):
                     if chunk.content:
                         full_content += chunk.content
                         yield chunk
@@ -295,7 +371,9 @@ class Orchestrator:
                         # collect tool calls for execution
                         pass
             except CtxOverflowError:
-                messages = self._compact_messages(messages, keep_tokens=self.settings.max_session_tokens // 4)
+                messages = self._compact_messages(
+                    messages, keep_tokens=self.settings.max_session_tokens // 4
+                )
                 continue
             except Exception as e:
                 self.obs.error(classify(e), str(e))
@@ -309,7 +387,9 @@ class Orchestrator:
         if full_content:
             messages.append(LLMMessage(role="assistant", content=full_content))
             self._session_histories[sid] = messages
-            self.storage.store_session(sid, summary=full_content[:200], token_usage=budget.used)
+            self.storage.store_session(
+                sid, summary=full_content[:200], token_usage=budget.used
+            )
 
     def clear_session(self, session_id: str) -> None:
         self._session_histories.pop(session_id, None)

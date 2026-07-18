@@ -1,4 +1,5 @@
 """M4 tests: RL trajectory export + dialectic user modeling."""
+
 from __future__ import annotations
 
 import json
@@ -16,12 +17,35 @@ def _seed(storage):
     sid = uuid.uuid4().hex[:8]
     for i in range(3):
         storage.store_session(f"{sid}_sess_{i}", f"summary {i}", 50)
-    storage.log_trajectory(f"{sid}_t1", f"{sid}_sess_0", True, ["summarize-text"],
-                           {"task": "summarize report", "trajectory": [], "answer": "The report covers Q1 results."})
-    storage.log_trajectory(f"{sid}_t2", f"{sid}_sess_1", False, [],
-                           {"task": "broken task", "trajectory": [], "answer": ""})
-    storage.log_trajectory(f"{sid}_t3", f"{sid}_sess_2", True, ["research-paper-writing"],
-                           {"task": "draft abstract", "trajectory": [], "answer": "We present a novel method for..."})
+    storage.log_trajectory(
+        f"{sid}_t1",
+        f"{sid}_sess_0",
+        True,
+        ["summarize-text"],
+        {
+            "task": "summarize report",
+            "trajectory": [],
+            "answer": "The report covers Q1 results.",
+        },
+    )
+    storage.log_trajectory(
+        f"{sid}_t2",
+        f"{sid}_sess_1",
+        False,
+        [],
+        {"task": "broken task", "trajectory": [], "answer": ""},
+    )
+    storage.log_trajectory(
+        f"{sid}_t3",
+        f"{sid}_sess_2",
+        True,
+        ["research-paper-writing"],
+        {
+            "task": "draft abstract",
+            "trajectory": [],
+            "answer": "We present a novel method for...",
+        },
+    )
     return sid
 
 
@@ -71,7 +95,9 @@ def test_export_filter_by_skill():
 def test_dialectic_reflect_with_mock():
     rt = make_runtime(Path("/tmp") / f"pulse_m4_dr_{uuid.uuid4().hex}")
     rt.storage.store_session("s1", "User asked about async Python frameworks.", 40)
-    rt.storage.store_session("s2", "User prefers local Ollama and self-hosted tools.", 50)
+    rt.storage.store_session(
+        "s2", "User prefers local Ollama and self-hosted tools.", 50
+    )
     rt.memory.add_user_fact("User is a backend engineer.")
     rt.memory.add_user_fact("User works with Python.")
 

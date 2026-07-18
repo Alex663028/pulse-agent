@@ -13,6 +13,7 @@ Commands:
   cron list|add|remove|pause|resume  manage scheduled jobs
   rl export            export trajectories for RL training
 """
+
 from __future__ import annotations
 
 import json
@@ -28,7 +29,10 @@ from pulse.cli.doctor import run_doctor
 from pulse.cli.init_wizard import run_init
 from pulse.cli.runtime import bootstrap
 
-app = typer.Typer(help="Pulse — a Hermes-style self-improving personal agent (reliability-first).", no_args_is_help=True)
+app = typer.Typer(
+    help="Pulse — a Hermes-style self-improving personal agent (reliability-first).",
+    no_args_is_help=True,
+)
 skills_app = typer.Typer(help="Manage skills.")
 cron_app = typer.Typer(help="Manage scheduled cron jobs.")
 rl_app = typer.Typer(help="RL training data pipeline.")
@@ -67,11 +71,19 @@ def _save_cron(rt, jobs: dict) -> None:
 
 @app.command()
 def init(
-    provider: str = typer.Option(None, help="ollama|openai|openrouter|deepseek|anthropic"),
+    provider: str = typer.Option(
+        None, help="ollama|openai|openrouter|deepseek|anthropic"
+    ),
     model: str = typer.Option(None, help="model name, e.g. qwen2.5:7b"),
     api_key: str = typer.Option(None, help="API key for cloud providers"),
-    base_url: str = typer.Option(None, "--base-url", help="Custom OpenAI-compatible endpoint base URL (e.g. https://my-gateway.example.com/v1)"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="non-interactive with defaults"),
+    base_url: str = typer.Option(
+        None,
+        "--base-url",
+        help="Custom OpenAI-compatible endpoint base URL (e.g. https://my-gateway.example.com/v1)",
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="non-interactive with defaults"
+    ),
 ):
     """Configure Pulse (zero-config, defaults to local Ollama).
 
@@ -82,7 +94,14 @@ def init(
     """
     from pulse.config.settings import load_settings
 
-    run_init(load_settings(), provider=provider, model=model, api_key=api_key, base_url=base_url, non_interactive=yes)
+    run_init(
+        load_settings(),
+        provider=provider,
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        non_interactive=yes,
+    )
 
 
 @app.command()
@@ -103,7 +122,9 @@ def doctor():
 def chat(
     task: str = typer.Argument(..., help="the task or message"),
     session: str = typer.Option(None, help="resume a session id"),
-    stream: bool = typer.Option(False, "--stream", "-s", help="Show streaming output as LLM responds"),
+    stream: bool = typer.Option(
+        False, "--stream", "-s", help="Show streaming output as LLM responds"
+    ),
 ):
     """Run a task through the orchestrator."""
     rt = bootstrap(load_mcp=True)
@@ -126,11 +147,17 @@ def chat(
         if res.used_skills:
             console.print(f"[dim]skills:[/dim] {', '.join(res.used_skills)}")
         if res.candidate_skill:
-            console.print(f"[cyan]↳ proposed candidate skill:[/cyan] {res.candidate_skill} (run `pulse skills eval {res.candidate_skill}`)")
+            console.print(
+                f"[cyan]↳ proposed candidate skill:[/cyan] {res.candidate_skill} (run `pulse skills eval {res.candidate_skill}`)"
+            )
         if res.success:
-            console.print(Panel(res.answer or "(no content)", title="Pulse", border_style="green"))
+            console.print(
+                Panel(res.answer or "(no content)", title="Pulse", border_style="green")
+            )
         else:
-            console.print(Panel(res.error or "failed", title="Pulse", border_style="red"))
+            console.print(
+                Panel(res.error or "failed", title="Pulse", border_style="red")
+            )
         console.print(f"[dim]tokens={res.token_usage} trace={res.trace_id}[/dim]")
 
 
@@ -145,7 +172,9 @@ def tui():
 @app.command()
 def serve(
     tui_flag: bool = typer.Option(True, "--tui/--no-tui", help="enable TUI gateway"),
-    telegram_flag: bool = typer.Option(False, "--telegram/--no-telegram", help="enable Telegram gateway"),
+    telegram_flag: bool = typer.Option(
+        False, "--telegram/--no-telegram", help="enable Telegram gateway"
+    ),
 ):
     """Start all configured gateways + scheduler (TUI + Telegram + cron)."""
     from pulse.gateways.base import GatewayManager
@@ -172,7 +201,9 @@ def serve(
         sched.add(name, interval, _make_job(task))
 
     if mgr.gateways:
-        console.print(f"[cyan]Starting gateways:[/cyan] {', '.join(g.name for g in mgr.gateways)}")
+        console.print(
+            f"[cyan]Starting gateways:[/cyan] {', '.join(g.name for g in mgr.gateways)}"
+        )
         mgr.start_all(rt)
     if cron_jobs:
         console.print(f"[cyan]Starting cron jobs:[/cyan] {len(cron_jobs)}")
@@ -181,6 +212,7 @@ def serve(
     try:
         # signal.pause() is unavailable on Windows; use an Event instead.
         import threading
+
         threading.Event().wait()
     except (KeyboardInterrupt, AttributeError):
         pass
@@ -209,10 +241,16 @@ def fork(
     console.print(f"[dim]{len(subs)} sub-tasks → {workers} workers[/dim]")
     pool = SubagentPool(max_workers=workers)
     tasks = [
-        SubagentTask(id=f"sub_{i}", description=s, context=f"Part {i+1}/{len(subs)}") for i, s in enumerate(subs)
+        SubagentTask(id=f"sub_{i}", description=s, context=f"Part {i + 1}/{len(subs)}")
+        for i, s in enumerate(subs)
     ]
     with console.status("[cyan]Sub-agents running…[/cyan]"):
-        results = pool.run(tasks, primary=rt.router.primary, tools=rt.tools, recursive=RecursionContext(router=rt.router, tools=rt.tools))
+        results = pool.run(
+            tasks,
+            primary=rt.router.primary,
+            tools=rt.tools,
+            recursive=RecursionContext(router=rt.router, tools=rt.tools),
+        )
     for r in results:
         icon = "[green]✓[/green]" if r.success else "[red]✗[/red]"
         console.print(f"  {icon} {r.task_id}  tokens={r.tokens}  {r.elapsed:.1f}s")
@@ -237,7 +275,9 @@ def team(
         result = tm.run(task, primary=rt.router.primary, tools=rt.tools)
     console.print(
         Panel(
-            result.answer[:3000] if result.success else f"[red]Reviewer:[/red] {result.reviewer_notes[:2000]}",
+            result.answer[:3000]
+            if result.success
+            else f"[red]Reviewer:[/red] {result.reviewer_notes[:2000]}",
             title=f"Team result (rounds={result.rounds} {'✓' if result.success else '✗'})",
             border_style="green" if result.success else "yellow",
         )
@@ -254,7 +294,9 @@ def skills_list():
 
 
 @skills_app.command("install")
-def skills_install(location: str = typer.Argument(..., help="path or git URL to a skill")):
+def skills_install(
+    location: str = typer.Argument(..., help="path or git URL to a skill"),
+):
     """Install a skill from the ecosystem."""
     skills_cli.cmd_install(bootstrap(), location)
 
@@ -276,7 +318,9 @@ def skills_promote(name: str = typer.Argument(...)):
 
 
 @skills_app.command("rollback")
-def skills_rollback(name: str = typer.Argument(...), to: str = typer.Option(None, "--to")):
+def skills_rollback(
+    name: str = typer.Argument(...), to: str = typer.Option(None, "--to")
+):
     """Roll a skill back to a previous version."""
     skills_cli.cmd_rollback(bootstrap(), name, to)
 
@@ -291,7 +335,9 @@ def cron_list():
         console.print("[yellow]No cron jobs.[/yellow]")
         return
     for name, spec in jobs.items():
-        console.print(f"  [bold]{name}[/bold]  every {spec['interval']}s  task: {spec.get('task','')[:80]}")
+        console.print(
+            f"  [bold]{name}[/bold]  every {spec['interval']}s  task: {spec.get('task', '')[:80]}"
+        )
 
 
 @cron_app.command("add")
@@ -351,7 +397,10 @@ def cron_resume(name: str = typer.Argument(..., help="job name to resume")):
 @app.command()
 def memory(
     action: str = typer.Argument(..., help="recall|add|profile"),
-    query: str = typer.Argument(None, help="query (recall/add) or sub-action (profile: reflect|history|rollback)"),
+    query: str = typer.Argument(
+        None,
+        help="query (recall/add) or sub-action (profile: reflect|history|rollback)",
+    ),
     limit: int = typer.Option(5, help="recall result limit"),
     version: int = typer.Option(None, help="version number for rollback"),
 ):
@@ -362,7 +411,9 @@ def memory(
         if not hits:
             console.print("[yellow]No memory matches.[/yellow]")
         for h in hits:
-            console.print(f"[dim]{h.get('session_id','?')}[/dim] {h.get('content','')[:160]}")
+            console.print(
+                f"[dim]{h.get('session_id', '?')}[/dim] {h.get('content', '')[:160]}"
+            )
     elif action == "add":
         rt.memory.add_note(query or "")
         console.print("[green]✓ noted.[/green]")
@@ -375,8 +426,12 @@ def memory(
             console.print("[cyan]Dialectical reflection…[/cyan]")
             result = eng.reflect()
             if result:
-                console.print(Panel(result[:2000], title="Updated USER.md", border_style="cyan"))
-                console.print("[green]✓ profile refined (previous version snapshot kept)[/green]")
+                console.print(
+                    Panel(result[:2000], title="Updated USER.md", border_style="cyan")
+                )
+                console.print(
+                    "[green]✓ profile refined (previous version snapshot kept)[/green]"
+                )
             else:
                 console.print("[yellow]No changes (profile unchanged)[/yellow]")
         elif sub == "history":
@@ -387,9 +442,13 @@ def memory(
                 console.print(f"  v{h['version']}  {h['size']}B  {h['path']}")
         elif sub == "rollback":
             eng.rollback(version)
-            console.print(f"[green]✓ rolled back to v{version or 'latest snapshot'}[/green]")
+            console.print(
+                f"[green]✓ rolled back to v{version or 'latest snapshot'}[/green]"
+            )
         else:
-            console.print("[red]profile action must be: reflect, history, rollback[/red]")
+            console.print(
+                "[red]profile action must be: reflect, history, rollback[/red]"
+            )
     else:
         console.print("[red]action must be 'recall', 'add', or 'profile'[/red]")
 
@@ -397,7 +456,9 @@ def memory(
 # ---- rl subcommands ----
 @rl_app.command("export")
 def rl_export(
-    out: str = typer.Option("trajectories.jsonl", "--out", "-o", help="output file path"),
+    out: str = typer.Option(
+        "trajectories.jsonl", "--out", "-o", help="output file path"
+    ),
     fmt: str = typer.Option("jsonl", "--format", "-f", help="jsonl|sharegpt"),
     since: str = typer.Option(None, help="ISO date filter (e.g. 2026-01-01)"),
     outcome: bool = typer.Option(None, help="filter by outcome (True=success)"),
@@ -409,9 +470,13 @@ def rl_export(
 
     rt = bootstrap()
     if fmt == "sharegpt":
-        n = export_sharegpt(rt.storage, out, since=since, outcome=outcome, skill=skill, limit=limit)
+        n = export_sharegpt(
+            rt.storage, out, since=since, outcome=outcome, skill=skill, limit=limit
+        )
     else:
-        n = export_jsonl(rt.storage, out, since=since, outcome=outcome, skill=skill, limit=limit)
+        n = export_jsonl(
+            rt.storage, out, since=since, outcome=outcome, skill=skill, limit=limit
+        )
     console.print(f"[green]✓ exported {n} trajectories → {out}[/green]")
 
 
@@ -429,7 +494,9 @@ def insights(
 
     rt = bootstrap()
     usage = UsageInsights(rt.storage, rt.settings)
-    console.print(Panel(usage.insights_text(days), title="Pulse Analytics", border_style="cyan"))
+    console.print(
+        Panel(usage.insights_text(days), title="Pulse Analytics", border_style="cyan")
+    )
 
 
 @analytics_app.command("curator")
@@ -456,7 +523,9 @@ def curator(
             if not all_stats:
                 console.print("[yellow]No skills tracked yet.[/yellow]")
             for s in all_stats:
-                console.print(f"  [bold{s['name']}[/bold] state={s['state']} uses={s['use_count']}")
+                console.print(
+                    f"  [bold{s['name']}[/bold] state={s['state']} uses={s['use_count']}"
+                )
     elif action == "run":
         report = curator.run_maintenance(registry=rt.registry)
         console.print(f"[green]✓ maintenance complete:[/green] {report}")
@@ -483,7 +552,9 @@ def plugin_list():
 
 
 @plugin_app.command("install")
-def plugin_install(path: str = typer.Argument(..., help="path to plugin directory or .py file")):
+def plugin_install(
+    path: str = typer.Argument(..., help="path to plugin directory or .py file"),
+):
     """Install a plugin (copy to plugins dir)."""
     import shutil
 
@@ -586,12 +657,17 @@ def web_start(
     """Start the Web UI dashboard on port 10000."""
     from pulse.web.server import main as web_main
     import sys
-    sys.argv = ["pulse-web", "--port", str(port), "--host", host] + (["--debug"] if debug else [])
+
+    sys.argv = ["pulse-web", "--port", str(port), "--host", host] + (
+        ["--debug"] if debug else []
+    )
     web_main()
 
 
 # ---- profile subcommands ----
-profile_app = typer.Typer(help="Manage named profiles (isolated configs/sessions/skills).")
+profile_app = typer.Typer(
+    help="Manage named profiles (isolated configs/sessions/skills)."
+)
 app.add_typer(profile_app, name="profile")
 
 
@@ -666,7 +742,7 @@ TUTORIALS = {
    [cyan]pulse skills install <path-or-url>[/cyan]
 
 For the full feature list, see [cyan]pulse docs features[/cyan]
-"""
+""",
     },
     "features": {
         "title": "Feature List",
@@ -697,7 +773,7 @@ For the full feature list, see [cyan]pulse docs features[/cyan]
 [bold]Web UI:[/bold]
 • React SPA at http://127.0.0.1:10000
 • Chat, sessions, tools, skills views
-"""
+""",
     },
     "security": {
         "title": "Security Model",
@@ -718,14 +794,16 @@ in tool output. Always-on, no config needed.
 Some commands are always blocked regardless of mode:
 • rm -rf / (filesystem wipe)
 • dd if=/dev/zero of=/dev/sda (disk overwrite)
-"""
-    }
+""",
+    },
 }
 
 
 @docs_app.command()
 def docs(
-    topic: str = typer.Option("quickstart", "--topic", "-t", help="quickstart|features|security"),
+    topic: str = typer.Option(
+        "quickstart", "--topic", "-t", help="quickstart|features|security"
+    ),
 ):
     """Show embedded docs/tutorial for a topic."""
     tutorial = TUTORIALS.get(topic)
@@ -733,17 +811,23 @@ def docs(
         console.print(f"[red]Unknown topic:[/red] {topic}")
         console.print(f"Available: {', '.join(TUTORIALS.keys())}")
         return
-    console.print(Panel(tutorial["content"].strip(), title=tutorial["title"], border_style="blue"))
+    console.print(
+        Panel(tutorial["content"].strip(), title=tutorial["title"], border_style="blue")
+    )
 
 
 # ---- evolution subcommands ----
-evolve_app = typer.Typer(help="Self-evolution: analyze runtime patterns and propose improvements.")
+evolve_app = typer.Typer(
+    help="Self-evolution: analyze runtime patterns and propose improvements."
+)
 app.add_typer(evolve_app, name="evolve")
 
 
 @evolve_app.command("analyze")
 def evolve_analyze(
-    limit: int = typer.Option(50, "--limit", "-l", help="Number of recent trajectories to analyze"),
+    limit: int = typer.Option(
+        50, "--limit", "-l", help="Number of recent trajectories to analyze"
+    ),
 ):
     """Analyze runtime patterns and propose self-improvements."""
     from pulse.evolution import EvolutionAnalyzer, EvolutionEngine
@@ -781,12 +865,16 @@ def evolve_status():
     console.print("[cyan]Evolution Status[/cyan]")
     console.print(f"Signals detected: {len(signals)}")
     for s in signals:
-        console.print(f"  [{s.kind}] {s.source}: {s.description[:60]} (conf={s.confidence:.2f})")
+        console.print(
+            f"  [{s.kind}] {s.source}: {s.description[:60]} (conf={s.confidence:.2f})"
+        )
 
 
 @evolve_app.command("apply")
 def evolve_apply(
-    index: int = typer.Argument(..., help="Index of proposal to apply (from 'evolve analyze')"),
+    index: int = typer.Argument(
+        ..., help="Index of proposal to apply (from 'evolve analyze')"
+    ),
 ):
     """Apply a queued evolution proposal."""
     from pulse.evolution import EvolutionAnalyzer, EvolutionEngine

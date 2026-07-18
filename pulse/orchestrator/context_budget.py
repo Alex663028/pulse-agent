@@ -5,6 +5,7 @@ compaction (via the memory compactor); crossing the hard cap raises
 ``CtxOverflowError`` so the orchestrator can recover instead of silently
 truncating or crashing.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -25,14 +26,18 @@ class ContextBudget:
         """Account for ``tokens`` of usage; raises ``CtxOverflowError`` past the hard cap."""
         self.used += tokens
         if self.used > self.max_tokens:
-            raise CtxOverflowError(f"token budget exceeded: {self.used} > {self.max_tokens}")
+            raise CtxOverflowError(
+                f"token budget exceeded: {self.used} > {self.max_tokens}"
+            )
 
     @property
     def over_soft(self) -> bool:
         """True when usage has crossed the soft compaction threshold."""
         return self.used >= self.soft
 
-    def fit(self, text: str, keep_tokens: int, llm: Optional[LLMProvider] = None) -> str:
+    def fit(
+        self, text: str, keep_tokens: int, llm: Optional[LLMProvider] = None
+    ) -> str:
         """If over the soft threshold, compact ``text`` down to ``keep_tokens``."""
         from pulse.memory.compactor import compact
 

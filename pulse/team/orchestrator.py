@@ -8,6 +8,7 @@ Implements the agent-team-orchestration pattern:
 Workflow: decompose → build (parallel) → review → refine (if needed) → ship.
 Each handoff follows the protocol: what done, where, how to verify, issues, next.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -60,7 +61,13 @@ class TeamOrchestrator:
         self.max_rounds = max_rounds
         self.pool = SubagentPool(max_workers=max_workers)
 
-    def run(self, task: str, primary: LLMProvider, tools: Optional[ToolRegistry] = None, router: Optional[Router] = None) -> TeamResult:
+    def run(
+        self,
+        task: str,
+        primary: LLMProvider,
+        tools: Optional[ToolRegistry] = None,
+        router: Optional[Router] = None,
+    ) -> TeamResult:
         """Run the full Builder → Reviewer pipeline for ``task``.
 
         If ``router`` is provided, sub-agents run in recursive mode with full
@@ -71,10 +78,20 @@ class TeamOrchestrator:
         except Exception as e:  # noqa: BLE001
             return TeamResult(task=task, success=False, error=str(e))
 
-    def _run(self, task: str, primary: LLMProvider, tools: ToolRegistry | None, router: Router | None) -> TeamResult:
+    def _run(
+        self,
+        task: str,
+        primary: LLMProvider,
+        tools: ToolRegistry | None,
+        router: Router | None,
+    ) -> TeamResult:
         subs = decompose(task, llm=primary)
         feedback = ""
-        recursion = RecursionContext(router=router, tools=tools, max_iterations=5) if router and tools else None
+        recursion = (
+            RecursionContext(router=router, tools=tools, max_iterations=5)
+            if router and tools
+            else None
+        )
         for round_n in range(1, self.max_rounds + 1):
             ctx = f"(the reviewer returned feedback: {feedback})" if feedback else ""
             sub_tasks = [
@@ -82,7 +99,10 @@ class TeamOrchestrator:
                 for i, s in enumerate(subs)
             ]
             builder_results: list[SubagentResult] = self.pool.run(
-                sub_tasks, primary, tools, recursive=recursion,
+                sub_tasks,
+                primary,
+                tools,
+                recursive=recursion,
             )
             if not builder_results:
                 break
@@ -93,20 +113,30 @@ class TeamOrchestrator:
             review_resp = primary.chat(
                 [
                     LLMMessage(role="system", content=REVIEWER_SYSTEM),
-                    LLMMessage(role="user", content=f"ORIGINAL TASK: {task}\n\nBUILDER OUTPUT:\n{builder_output[:3000]}"),
+                    LLMMessage(
+                        role="user",
+                        content=f"ORIGINAL TASK: {task}\n\nBUILDER OUTPUT:\n{builder_output[:3000]}",
+                    ),
                 ]
             )
             review = review_resp.content.strip()
             if review.upper().startswith("APPROVED"):
                 merged = merge_results(task, builder_results, llm=primary)
                 return TeamResult(
-                    task=task, success=True, answer=merged, rounds=round_n,
-                    reviewer_notes=review, builder_results=builder_results,
+                    task=task,
+                    success=True,
+                    answer=merged,
+                    rounds=round_n,
+                    reviewer_notes=review,
+                    builder_results=builder_results,
                 )
             feedback = review
         merged = merge_results(task, builder_results, llm=primary)
         return TeamResult(
-            task=task, success=False, answer=merged, rounds=self.max_rounds,
+            task=task,
+            success=False,
+            answer=merged,
+            rounds=self.max_rounds,
             reviewer_notes=f"[max rounds reached] {feedback}",
             builder_results=builder_results,
         )

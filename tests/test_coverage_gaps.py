@@ -1,4 +1,5 @@
 """Coverage-improving tests for low-coverage pulse modules."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -78,9 +79,7 @@ class TestEvolution:
         existing = MagicMock()
         existing.status = "promoted"
         registry.get.side_effect = lambda name: existing if name == "do-stuff" else None
-        rec = propose_skill(
-            "do stuff", ["step1"], skills_dir, registry=registry
-        )
+        rec = propose_skill("do stuff", ["step1"], skills_dir, registry=registry)
         assert rec.name.startswith("do-stuff-v")
 
 
@@ -520,7 +519,9 @@ class TestCron:
         from pulse.scheduler.cron import Job
 
         s = Scheduler()
-        job = Job(name="j", interval=0, fn=lambda: (_ for _ in ()).throw(RuntimeError("fail")))
+        job = Job(
+            name="j", interval=0, fn=lambda: (_ for _ in ()).throw(RuntimeError("fail"))
+        )
         s._run_job(job)
         assert job.failures == 1
         assert len(s.history) == 1

@@ -1,5 +1,6 @@
 """Tests for the reliability layer: error classification, recovery, budget, and
 fault-tolerant orchestration."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -85,7 +86,9 @@ def _manual_runtime(tmp_path: Path, router: Router):
 
 
 def test_orchestrator_recovers_from_transient():
-    orch = _manual_runtime(Path("/tmp/pulse_test_recover"), Router(primary=flaky_provider(failures=2)))
+    orch = _manual_runtime(
+        Path("/tmp/pulse_test_recover"), Router(primary=flaky_provider(failures=2))
+    )
     res = orch.run("say hello")
     assert res.success is True
 
@@ -101,8 +104,15 @@ def test_orchestrator_tool_loop_and_evolution():
 
 def test_mock_provider_no_tool_loop():
     from tests._helpers import StubProvider
+
     p = StubProvider()
-    r1 = p.chat([LLMMessage(role="user", content="do [call:calc] 1+1")], tools=[{"type": "function"}])
+    r1 = p.chat(
+        [LLMMessage(role="user", content="do [call:calc] 1+1")],
+        tools=[{"type": "function"}],
+    )
     assert r1.tool_calls and r1.tool_calls[0].name == "calc"
-    r2 = p.chat([LLMMessage(role="user", content="do [call:calc] 1+1")], tools=[{"type": "function"}])
+    r2 = p.chat(
+        [LLMMessage(role="user", content="do [call:calc] 1+1")],
+        tools=[{"type": "function"}],
+    )
     assert not r2.tool_calls  # same tool not re-emitted -> no loop

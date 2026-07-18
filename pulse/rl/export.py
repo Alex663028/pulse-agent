@@ -6,6 +6,7 @@ Convert stored execution trajectories into standard fine-tuning formats:
 
 Supports filtering by date, outcome, and skill usage.
 """
+
 from __future__ import annotations
 
 import json
@@ -34,7 +35,9 @@ def _to_chatml(traj: dict[str, Any]) -> dict[str, Any]:
         "metadata": {
             "session_id": traj.get("session_id", ""),
             "outcome": bool(traj.get("outcome")),
-            "used_skills": json.loads(traj.get("used_skills", "[]")) if isinstance(traj.get("used_skills"), str) else traj.get("used_skills", []),
+            "used_skills": json.loads(traj.get("used_skills", "[]"))
+            if isinstance(traj.get("used_skills"), str)
+            else traj.get("used_skills", []),
             "created_at": traj.get("created_at", ""),
         },
     }
@@ -64,7 +67,9 @@ def export_jsonl(
     limit: int = 500,
 ) -> int:
     """Export trajectories as ChatML JSONL. Returns count of exported records."""
-    rows = storage.query_trajectories(since=since, outcome=outcome, skill=skill, limit=limit)
+    rows = storage.query_trajectories(
+        since=since, outcome=outcome, skill=skill, limit=limit
+    )
     count = 0
     with open(out_path, "w", encoding="utf-8") as f:
         for row in rows:
@@ -83,7 +88,9 @@ def export_sharegpt(
     limit: int = 500,
 ) -> int:
     """Export trajectories as ShareGPT JSON array. Returns count."""
-    rows = storage.query_trajectories(since=since, outcome=outcome, skill=skill, limit=limit)
+    rows = storage.query_trajectories(
+        since=since, outcome=outcome, skill=skill, limit=limit
+    )
     data = [_to_sharegpt(r) for r in rows]
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

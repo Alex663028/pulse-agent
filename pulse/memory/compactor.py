@@ -5,6 +5,7 @@ older turns are summarized (or truncated) so the agent never silently loses
 context or blows the context window. LLM-based summarization is used when a
 provider is available; otherwise a deterministic extractive fallback runs.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -18,7 +19,7 @@ def _naive_compact(text: str, keep_tokens: int) -> str:
     if len(text) <= budget_chars:
         return text
     head = text[: budget_chars // 3]
-    tail = text[-(budget_chars * 2 // 3):]
+    tail = text[-(budget_chars * 2 // 3) :]
     return f"{head}\n\n… [compressed {len(text) - len(head) - len(tail)} chars] …\n\n{tail}"
 
 

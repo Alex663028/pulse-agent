@@ -4,6 +4,7 @@ The single source of truth for provider/model/base_url lives in
 ``~/.pulse/config.yaml``; secrets live in ``~/.pulse/.env`` (API keys).
 Everything defaults to a fully local, self-hosted setup (Ollama).
 """
+
 from __future__ import annotations
 
 import os
@@ -65,7 +66,9 @@ class Settings(BaseModel):
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     # Profile (multi-config isolation)
     profile: str = "default"
-    profiles_dir: Path = Field(default_factory=lambda: Path.home() / ".pulse" / "profiles")
+    profiles_dir: Path = Field(
+        default_factory=lambda: Path.home() / ".pulse" / "profiles"
+    )
     # RAG config
     rag_enabled: bool = False
     rag_chunk_size: int = 500
@@ -126,7 +129,9 @@ def get_profile_dir(profile: str = "default") -> Path:
     return Path.home() / ".pulse" / "profiles" / profile
 
 
-def load_settings(config_dir: Optional[Path] = None, profile: Optional[str] = None) -> Settings:
+def load_settings(
+    config_dir: Optional[Path] = None, profile: Optional[str] = None
+) -> Settings:
     """Load settings from ``config.yaml`` if present, else defaults.
 
     If ``profile`` is specified, loads from that profile's directory.
@@ -151,7 +156,9 @@ def load_settings(config_dir: Optional[Path] = None, profile: Optional[str] = No
     )
     if model_raw:
         merged = settings.model.model_dump()
-        merged.update({k: v for k, v in model_raw.items() if k in ModelSettings.model_fields})
+        merged.update(
+            {k: v for k, v in model_raw.items() if k in ModelSettings.model_fields}
+        )
         settings.model = ModelSettings(**merged)
     settings.ensure_dirs()
     return settings
@@ -164,7 +171,9 @@ def save_settings(s: Settings) -> Path:
     # data_dir is derived; store only if non-default for clarity
     payload["data_dir"] = str(s.data_dir)
     path = s.config_dir / "config.yaml"
-    path.write_text(yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    path.write_text(
+        yaml.safe_dump(payload, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
     return path
 
 
@@ -182,6 +191,7 @@ def load_env(s: Settings) -> dict[str, str]:
         st = s.env_path.stat()
         if st.st_mode & 0o077:  # any group/other access bits
             import logging
+
             logging.getLogger("pulse.config").warning(
                 f"Permissions on {s.env_path} are too open ({oct(st.st_mode)[-3:]}). "
                 f"Consider running: chmod 600 {s.env_path}"

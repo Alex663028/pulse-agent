@@ -1,4 +1,5 @@
 """Shared runtime assembly for CLI commands."""
+
 from __future__ import annotations
 
 import logging
@@ -35,7 +36,9 @@ class Runtime:
     mcp: Any = None
 
 
-def bootstrap(config_dir=None, load_mcp: bool = False, profile: Optional[str] = None) -> Runtime:
+def bootstrap(
+    config_dir=None, load_mcp: bool = False, profile: Optional[str] = None
+) -> Runtime:
     # Auto-detect profile from env var
     if profile is None:
         profile = os.environ.get("PULSE_PROFILE")
@@ -51,8 +54,14 @@ def bootstrap(config_dir=None, load_mcp: bool = False, profile: Optional[str] = 
         tools.register(custom_tool)
     # Load executable skills and register their tools
     from pulse.skills.executable import load_executable_skills
+
     for handle in load_executable_skills(
-        [settings.skills_dir, settings.config_dir / "skills", settings.skills_dir.parent / "skills"], tools
+        [
+            settings.skills_dir,
+            settings.config_dir / "skills",
+            settings.skills_dir.parent / "skills",
+        ],
+        tools,
     ):
         if handle.errors:
             logger.warning("skill '%s' failed to load: %s", handle.name, handle.errors)
@@ -63,11 +72,13 @@ def bootstrap(config_dir=None, load_mcp: bool = False, profile: Optional[str] = 
     manager = None
     if load_mcp and settings.mcp_servers:
         from pulse.mcp import MCPManager
+
         manager = MCPManager(tools)
         manager.load_servers(settings.mcp_servers)
         rt.mcp = manager
     try:
         from pulse.cli.runtime_ext import apply_extensions
+
         apply_extensions(rt)
         orch._ext = getattr(rt, "ext", None)
         obs._ext = getattr(rt, "ext", None)
@@ -82,9 +93,11 @@ def _setup_logging(level: str = "INFO") -> None:
     if logger_root.handlers:
         return
     handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter(
-        "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-        datefmt="%H:%M:%S",
-    ))
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+            datefmt="%H:%M:%S",
+        )
+    )
     logger_root.setLevel(lvl)
     logger_root.addHandler(handler)

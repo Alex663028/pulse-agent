@@ -6,6 +6,7 @@ agentskills.io requires ``name`` (lowercase-hyphen, == directory name) and
 platforms/metadata.hermes``. Our loader *tolerates and preserves* every extra
 field so existing ecosystem skills load without error.
 """
+
 from __future__ import annotations
 
 import re

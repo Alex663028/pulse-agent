@@ -4,6 +4,7 @@ Pluggable backend:
 - Local: simple policy gradient with numpy/scikit-learn
 - Remote: call external RL service / OpenAI fine-tuning API
 """
+
 from __future__ import annotations
 
 import json
@@ -53,13 +54,19 @@ class RLTrainer:
         path = self.out_dir / f"rl_{int(time.time())}.jsonl"
         with path.open("w", encoding="utf-8") as f:
             for s in self._buffer:
-                f.write(json.dumps({
-                    "session_id": s.session_id,
-                    "prompt": s.prompt,
-                    "response": s.response,
-                    "reward": s.reward,
-                    "metadata": s.metadata,
-                }, ensure_ascii=False) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "session_id": s.session_id,
+                            "prompt": s.prompt,
+                            "response": s.response,
+                            "reward": s.reward,
+                            "metadata": s.metadata,
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
         count = len(self._buffer)
         self._buffer.clear()
         logger.info("[rl] flushed %d samples to %s", count, path)
@@ -80,7 +87,9 @@ def compute_reward(trajectory: dict[str, Any]) -> float:
     outcome = bool(trajectory.get("outcome"))
     used_skills = trajectory.get("used_skills", [])
     if isinstance(used_skills, str):
-        used_skills = safe_parse_json(used_skills) if isinstance(used_skills, str) else []
+        used_skills = (
+            safe_parse_json(used_skills) if isinstance(used_skills, str) else []
+        )
     reward = 1.0 if outcome else -0.2
     reward += 0.1 * min(len(used_skills), 3)
     return float(max(-1.0, min(1.0, reward)))
@@ -93,12 +102,17 @@ def backfill_rewards(storage: Any, limit: int = 500) -> int:
     for row in rows:
         reward = compute_reward(row)
         data = safe_parse_json(row.get("data"))
-        trainer.add_sample(RewardSample(
-            session_id=row.get("session_id", ""),
-            prompt=data.get("task", ""),
-            response=data.get("answer", ""),
-            reward=reward,
-            metadata={"outcome": bool(row.get("outcome")), "used_skills": row.get("used_skills", [])},
-        ))
+        trainer.add_sample(
+            RewardSample(
+                session_id=row.get("session_id", ""),
+                prompt=data.get("task", ""),
+                response=data.get("answer", ""),
+                reward=reward,
+                metadata={
+                    "outcome": bool(row.get("outcome")),
+                    "used_skills": row.get("used_skills", []),
+                },
+            )
+        )
     path = trainer.flush()
     return sum(1 for _ in path.open("r", encoding="utf-8"))
