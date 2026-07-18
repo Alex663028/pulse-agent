@@ -20,7 +20,7 @@ from typing import Any, Optional
 try:
     from pulse import __version__
 except Exception:
-    __version__ = "0.3.0"
+    __version__ = "0.7.0"
 
 from pulse.tools.base import Tool, ToolResult
 

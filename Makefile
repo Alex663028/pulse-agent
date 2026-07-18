@@ -1,6 +1,6 @@
 .PHONY: test coverage lint format install clean docker help
 
-VERSION := 0.6.1
+VERSION := 0.7.0
 
 help:
 	@echo "Pulse Agent v$(VERSION)"
