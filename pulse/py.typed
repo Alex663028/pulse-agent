@@ -1,0 +1,3 @@
+# Minimal PyPI packaging for verification
+# This would normally come from pyproject.toml which is configured for setuptools
+# Run: python -m build
