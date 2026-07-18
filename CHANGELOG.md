@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pulse/net.py**: `http_request()` with exponential backoff retry (configurable `max_retries`, `backoff`). `safe_parse_json()` helper that handles JSON strings, dicts, and failure gracefully.
 
 ### Added — PyPI publishing
-- **.github/workflows/release.yml**: automatic build + publish to PyPI on tag push using GitHub Actions Trusted Publishing (OIDC, no API tokens needed).
+- **.github/workflows/release.yml**: (removed) initially added but deferred due to name conflict on PyPI. The name `pulse-agent` is already taken.
 
 ### Improved — Documentation
 - **README.md**: refactored from 24-item feature dump into 3 core pillars (Reliability, Self-improving Skills, Enterprise-Ready) + Ecosystem table. Clear "Why Pulse?" differentiation from Hermes.

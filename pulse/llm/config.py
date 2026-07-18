@@ -31,7 +31,7 @@ def _make_compat(settings: Settings, env: dict[str, str], provider: str) -> LLMP
             )
         except ImportError:
             raise LLMError(
-                "anthropic package not installed; pip install pulse-agent[anthropic]"
+                "anthropic package not installed; pip install git+https://github.com/Alex663028/pulse-agent.git#egg=pulse-agent[anthropic]"
             )
     key = env.get(settings.api_key_env) or env.get(f"{provider.upper()}_API_KEY", "")
     base_urls = {

@@ -123,15 +123,4 @@ When bumping, update ALL four locations. Current version: **0.7.0**.
 
 ## PyPI Release
 
-Releases are published to PyPI automatically via GitHub Actions when a new tag is pushed:
-
-1. Bump version in `pyproject.toml` and `pulse/__init__.py`
-2. Commit and push changes
-3. Create and push a new tag:
-   ```bash
-   git tag -a v0.7.1 -m "v0.7.1 — description"
-   git push origin v0.7.1
-   ```
-4. The release workflow builds and publishes to PyPI
-
-Note: PyPI publishing uses [trusted publishing](https://docs.pypi.org/trusted-publishers/) — no API tokens needed. The PyPI project must be configured with a GitHub Actions trusted publisher.
+> **Note:** The name `pulse-agent` is already taken on PyPI by another project. We are evaluating alternative package names for PyPI publishing. In the meantime, install from source (see README).

@@ -1,7 +1,6 @@
 # Pulse — A Self-improving AI Agent You Can Trust
 
 [![CI](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex663028/pulse-agent/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/pulse-agent)](https://pypi.org/project/pulse-agent/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v0.7.0-blue)](https://github.com/Alex663028/pulse-agent/releases/tag/v0.7.0)
 
@@ -55,15 +54,19 @@ What ships in the box:
 
 ## Quick Start
 
-### Install
+### Install from source
 
 ```bash
-# From PyPI (recommended)
-pip install pulse-agent
+# Clone and install
+git clone https://github.com/Alex663028/pulse-agent.git
+cd pulse-agent
+pip install -e .
 
-# Or install from source
+# Or install directly from GitHub
 pip install git+https://github.com/Alex663028/pulse-agent.git
-# Or: git clone https://github.com/Alex663028/pulse-agent.git && cd pulse-agent && pip install -e ".[dev]"
+
+# Dev install (for contributors)
+pip install -e ".[dev]"
 ```
 
 ### Run
@@ -101,7 +104,7 @@ pulse doctor
 
 | Version | Release Date | Key Changes |
 |---------|-------------|-------------|
-| v0.7.0 | 2025-07-18 | PyPI support, enterprise RBAC, audit logging, SSO stub, i18n |
+| v0.7.0 | 2025-07-18 | Enterprise RBAC, audit logging, SSO stub, i18n |
 | v0.6.1 | 2025-07-17 | Security redaction, command approval, checkpoints, session search, curator, analytics |
 | v0.6.0 | 2025-07-17 | Circuit breaker, optimistic lock, async, tool filtering, React SPA |
 | v0.5.x | 2025-07-15 | Social gateways, Web UI, streaming, memory, feedback loop |
