@@ -9,6 +9,7 @@ Pulse already ships basic read/write/edit. Codex-level coding needs codex-style 
 - lint: ruff/mypy check
 - project_context: read imports, pyproject, structure
 """
+
 from __future__ import annotations
 
 import ast
@@ -33,7 +34,10 @@ class GitStatusTool(Tool):
         try:
             r = subprocess.run(
                 ["git", "status", "--short", "--branch"],
-                capture_output=True, text=True, timeout=10, cwd=path,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                cwd=path,
             )
             if r.returncode != 0:
                 return ToolResult(ok=False, error=r.stderr.strip())
@@ -46,7 +50,9 @@ class GitDiffTool(Tool):
     """Show diff for a file or the whole tree."""
 
     name = "git_diff"
-    description = "Show git diff. Args: path (file or directory), cached (bool, default False)"
+    description = (
+        "Show git diff. Args: path (file or directory), cached (bool, default False)"
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -79,7 +85,10 @@ class GitLogTool(Tool):
         "type": "object",
         "properties": {
             "path": {"type": "string", "description": "file or directory path"},
-            "count": {"type": "integer", "description": "number of commits (default 10)"},
+            "count": {
+                "type": "integer",
+                "description": "number of commits (default 10)",
+            },
         },
     }
 
@@ -87,7 +96,10 @@ class GitLogTool(Tool):
         try:
             r = subprocess.run(
                 ["git", "log", f"-n{count}", "--oneline", "--", path],
-                capture_output=True, text=True, timeout=10, cwd=".",
+                capture_output=True,
+                text=True,
+                timeout=10,
+                cwd=".",
             )
             if r.returncode != 0:
                 return ToolResult(ok=False, error=r.stderr.strip())
@@ -111,12 +123,22 @@ class GrepTool(Tool):
         "required": ["pattern"],
     }
 
-    def run(self, pattern: str, path: str = ".", glob: str = "*.py", **kwargs: Any) -> ToolResult:
+    def run(
+        self, pattern: str, path: str = ".", glob: str = "*.py", **kwargs: Any
+    ) -> ToolResult:
         try:
             import re
+
             results = []
             # Skip binary/cache dirs
-            skip_dirs = {".git", "__pycache__", ".pytest_cache", "node_modules", ".venv", "venv"}
+            skip_dirs = {
+                ".git",
+                "__pycache__",
+                ".pytest_cache",
+                "node_modules",
+                ".venv",
+                "venv",
+            }
             base = Path(path)
             for f in sorted(base.glob(glob)):
                 if not f.is_file():
@@ -151,7 +173,9 @@ class ReplTool(Tool):
     description = "Run a Python expression in the REPL. Args: code"
     parameters = {
         "type": "object",
-        "properties": {"code": {"type": "string", "description": "Python code to execute"}},
+        "properties": {
+            "code": {"type": "string", "description": "Python code to execute"}
+        },
         "required": ["code"],
     }
 
@@ -171,14 +195,19 @@ class TestRunnerTool(Tool):
     description = "Run pytest on a path. Args: path (default=.)"
     parameters = {
         "type": "object",
-        "properties": {"path": {"type": "string", "description": "test file or directory"}},
+        "properties": {
+            "path": {"type": "string", "description": "test file or directory"}
+        },
     }
 
     def run(self, path: str = ".", **kwargs: Any) -> ToolResult:
         try:
             r = subprocess.run(
                 ["python", "-m", "pytest", path, "-x", "--tb=short", "-q"],
-                capture_output=True, text=True, timeout=120, cwd=".",
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd=".",
             )
             ok = r.returncode == 0
             out = r.stdout[-4000:]
@@ -265,7 +294,9 @@ class ProjectContextTool(Tool):
                             elif isinstance(node, ast.ImportFrom) and node.module:
                                 imports.append(node.module)
                         if imports:
-                            lines.append(f"{pf.relative_to(root)}: {', '.join(sorted(set(imports)))}")
+                            lines.append(
+                                f"{pf.relative_to(root)}: {', '.join(sorted(set(imports)))}"
+                            )
                     except Exception:
                         pass
 
@@ -275,6 +306,12 @@ class ProjectContextTool(Tool):
 
 
 __all__ = [
-    "GitStatusTool", "GitDiffTool", "GitLogTool",
-    "GrepTool", "ReplTool", "TestRunnerTool", "LintTool", "ProjectContextTool",
+    "GitStatusTool",
+    "GitDiffTool",
+    "GitLogTool",
+    "GrepTool",
+    "ReplTool",
+    "TestRunnerTool",
+    "LintTool",
+    "ProjectContextTool",
 ]
