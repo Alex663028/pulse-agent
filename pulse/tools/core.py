@@ -121,7 +121,7 @@ class WriteFileTool(Tool):
 
     def run(self, path: str = "", content: str = "", **kwargs: Any) -> ToolResult:
         """Write ``content`` to ``path``, creating parent directories.
-        
+
         Creates a checkpoint snapshot if the file already exists.
         """
         try:
@@ -158,7 +158,7 @@ class EditFileTool(Tool):
 
     def run(self, path: str = "", old_string: str = "", new_string: str = "", **kwargs: Any) -> ToolResult:
         """Replace ``old_string`` with ``new_string`` in file ``path``.
-        
+
         Automatically creates a checkpoint snapshot before modification.
         """
         try:
