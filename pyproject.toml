@@ -1,6 +1,6 @@
 [project]
 name = "pulse-agent"
-version = "0.6.1"
+version = "0.7.0"
 description = "Pulse — a self-improving personal AI agent with a reliability-first core. Fully self-hostable by default (Ollama + SQLite FTS5, zero cloud dependency)."
 readme = "README.md"
 requires-python = ">=3.11"
