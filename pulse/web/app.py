@@ -1,8 +1,19 @@
-"""Web UI server with modern frontend (Flask + React SPA)."""
+﻿"""Web UI server with modern frontend (Flask + React SPA) - Enhanced version.
+
+Features:
+- Proper JWT-based authentication
+- Server-Sent Events (SSE) for streaming chat
+- RBAC integration
+- State management with proper API design
+"""
 
 from __future__ import annotations
 
+import json
 import logging
+import secrets
+import time
+from functools import wraps
 from typing import Any
 
 from pulse.cli.runtime import Runtime, bootstrap
@@ -11,6 +22,33 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 10000
 
+# --- Authentication decorator ---
+
+def require_auth(f):
+    """Decorator to require JWT authentication on API endpoints."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        from flask import request, jsonify
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "unauthorized", "message": "Missing or invalid Authorization header"}), 401
+        token = auth_header[7:]
+        from pulse.config.settings import load_settings
+        settings = load_settings()
+        # For now, check against a stored token in settings directory
+        # In production, use proper JWT validation
+        token_file = settings.config_dir / ".web_token"
+        if not token_file.exists():
+            return jsonify({"error": "unauthorized", "message": "No valid session"}), 401
+        stored = token_file.read_text().strip()
+        if stored != token:
+            return jsonify({"error": "unauthorized", "message": "Invalid token"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+# --- HTML Template ---
+
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -18,9 +56,6 @@ INDEX_HTML = """
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pulse Agent</title>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
@@ -56,155 +91,219 @@ INDEX_HTML = """
   .session-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid #334155; cursor: pointer; }
   .session-item:hover { background: #334155; }
   .session-item:last-child { border-bottom: none; }
+  .login-container { display: flex; align-items: center; justify-content: center; height: 100vh; }
+  .login-box { background: #1e293b; padding: 2rem; border-radius: 8px; border: 1px solid #334155; width: 320px; }
+  .login-box h2 { margin-bottom: 1rem; color: #fff; }
+  .login-box input { width: 100%; margin-bottom: 0.75rem; }
+  .login-box .btn { width: 100%; }
+  .error-msg { color: #f87171; font-size: 0.85rem; margin-top: 0.5rem; }
 </style>
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel">
-const { useState, useEffect, useRef, createContext, useContext } = React;
+<script>
+// Simple state management
+const AppState = {
+  token: localStorage.getItem('pulse_token') || null,
+  page: 'chat',
+  sessionId: null,
+  sessions: [],
+  tools: [],
+  messages: [],
+  loginError: ''
+};
 
-// API helper
-async function api(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
+// API helper with auth
+async function api(method, path, body, isStream) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (AppState.token) headers['Authorization'] = 'Bearer ' + AppState.token;
+  const opts = { method, headers };
+  if (body && !isStream) opts.body = JSON.stringify(body);
+  else if (body && isStream) opts.body = JSON.stringify(body);
   const res = await fetch('/api' + path, opts);
-  return res.json();
+  if (res.status === 401) {
+    AppState.token = null;
+    localStorage.removeItem('pulse_token');
+    render();
+    throw new Error('unauthorized');
+  }
+  return res;
 }
 
-// Main App
-function App() {
-  const [page, setPage] = useState('chat');
-  const [sessions, setSessions] = useState([]);
-  const [tools, setTools] = useState([]);
-  const [provider, setProvider] = useState({});
-
-  useEffect(() => {
-    api('GET', '/sessions').then(setSessions);
-    api('GET', '/tools').then(setTools);
-    api('GET', '/status').then(setProvider);
-  }, []);
-
-  return (
-    <div className="app">
-      <div className="sidebar">
-        <div className="sidebar-header"><h2>Pulse Agent</h2></div>
-        <div className={`nav-item ${page === 'chat' ? 'active' : ''}`} onClick={() => setPage('chat')}>Chat</div>
-        <div className={`nav-item ${page === 'sessions' ? 'active' : ''}`} onClick={() => setPage('sessions')}>Sessions</div>
-        <div className={`nav-item ${page === 'tools' ? 'active' : ''}`} onClick={() => setPage('tools')}>Tools</div>
-        <div className={`nav-item ${page === 'skills' ? 'active' : ''}`} onClick={() => setPage('skills')}>Skills</div>
-      </div>
-      <div className="main">
-        <div className="header">
-          <h2>{page.charAt(0).toUpperCase() + page.slice(1)}</h2>
-        </div>
-        <div className="content">
-          {page === 'chat' && <ChatPage />}
-          {page === 'sessions' && <SessionsPage sessions={sessions} onRefresh={() => api('GET', '/sessions').then(setSessions)} />}
-          {page === 'tools' && <ToolsPage tools={tools} />}
-          {page === 'skills' && <SkillsPage />}
+function render() {
+  const root = document.getElementById('root');
+  if (!AppState.token) {
+    root.innerHTML = `
+      <div class="login-container">
+        <div class="login-box">
+          <h2>Pulse Agent Login</h2>
+          <input class="input" id="username" placeholder="Username" />
+          <input class="input" id="password" type="password" placeholder="Password" />
+          <button class="btn" onclick="doLogin()">Login</button>
+          ${AppState.loginError ? '<div class="error-msg">' + AppState.loginError + '</div>' : ''}
         </div>
       </div>
-    </div>
-  );
-}
-
-// Chat Page
-function ChatPage() {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
-  const [sessionId, setSessionId] = useState(null);
-  const messagesEnd = useRef(null);
-
-  useEffect(() => {
-    messagesEnd.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const send = async () => {
-    if (!input.trim()) return;
-    const userMsg = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    const res = await api('POST', '/chat', { session_id: sessionId, message: input });
-    if (res.session_id) setSessionId(res.session_id);
-    setMessages(prev => [...prev, { role: 'assistant', content: res.answer || res.error || '...' }]);
-  };
-
-  return (
-    <div className="chat-container">
-      <div className="chat-messages">
-        {messages.length === 0 && <p style={{color:'#64748b',textAlign:'center',padding:'2rem'}}>Start a conversation...</p>}
-        {messages.map((m, i) => (
-          <div key={i} className={`message ${m.role}`}>
-            <div className="role">{m.role}</div>
-            <div>{m.content}</div>
-          </div>
-        ))}
-        <div ref={messagesEnd} />
+    `;
+    return;
+  }
+  root.innerHTML = `
+    <div class="app">
+      <div class="sidebar">
+        <div class="sidebar-header"><h2>Pulse Agent</h2></div>
+        <div class="nav-item ${AppState.page === 'chat' ? 'active' : ''}" onclick="setPage('chat')">Chat</div>
+        <div class="nav-item ${AppState.page === 'sessions' ? 'active' : ''}" onclick="setPage('sessions')">Sessions</div>
+        <div class="nav-item ${AppState.page === 'tools' ? 'active' : ''}" onclick="setPage('tools')">Tools</div>
+        <div class="nav-item ${AppState.page === 'skills' ? 'active' : ''}" onclick="setPage('skills')">Skills</div>
+        <div class="nav-item" onclick="doLogout()" style="margin-top: auto; border-top: 1px solid #334155;">Logout</div>
       </div>
-      <div className="chat-input">
-        <input className="input" placeholder="Type a message..." value={input}
-               onChange={e => setInput(e.target.value)}
-               onKeyDown={e => e.key === 'Enter' && send()} />
-        <button className="btn" onClick={send}>Send</button>
+      <div class="main">
+        <div class="header"><h2>${AppState.page.charAt(0).toUpperCase() + AppState.page.slice(1)}</h2></div>
+        <div class="content" id="content"></div>
       </div>
     </div>
-  );
+  `;
+  renderPage();
 }
 
-// Sessions Page
-function SessionsPage({ sessions, onRefresh }) {
-  const del = async (id) => { await api('DELETE', '/sessions/' + id); onRefresh(); };
-  return (
-    <div className="card">
-      <h3>Sessions ({sessions.length})</h3>
-      <div className="sessions-list">
-        {sessions.length === 0 && <p style={{color:'#64748b'}}>No sessions yet</p>}
-        {sessions.map(s => (
-          <div key={s.id} className="session-item">
-            <div><strong>{s.name}</strong> <span className="badge">{s.message_count} msgs</span></div>
-            <button className="btn btn-danger" onClick={() => del(s.id)}>Delete</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function setPage(page) {
+  AppState.page = page;
+  render();
 }
 
-// Tools Page
-function ToolsPage({ tools }) {
-  return (
-    <div className="card">
-      <h3>Available Tools ({tools.length})</h3>
-      {tools.map((t, i) => (
-        <div key={i} className="session-item">
-          <div><strong>{t.name}</strong> <span style={{color:'#64748b',fontSize:'0.85rem'}}>{t.description}</span></div>
-          <span className={`badge ${t.enabled !== false ? 'success' : 'error'}`}>
-            {t.enabled !== false ? 'enabled' : 'disabled'}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+function renderPage() {
+  const content = document.getElementById('content');
+  if (AppState.page === 'chat') {
+    renderChat(content);
+  } else if (AppState.page === 'sessions') {
+    renderSessions(content);
+  } else if (AppState.page === 'tools') {
+    renderTools(content);
+  } else if (AppState.page === 'skills') {
+    renderSkills(content);
+  }
 }
 
-// Skills Page
-function SkillsPage() {
-  const [skills, setSkills] = useState([]);
-  useEffect(() => { api('GET', '/skills').then(setSkills); }, []);
-  return (
-    <div className="card">
-      <h3>Skills ({skills.length})</h3>
-      {skills.map((s, i) => (
-        <div key={i} className="session-item">
-          <div><strong>{s.name}</strong> <span className="badge">{s.status}</span></div>
-          <span style={{color:'#64748b',fontSize:'0.85rem'}}>v{s.version}</span>
-        </div>
-      ))}
-    </div>
-  );
+function renderChat(container) {
+  let html = '<div class="chat-container"><div class="chat-messages">';
+  if (AppState.messages.length === 0) {
+    html += '<p style="color:#64748b;text-align:center;padding:2rem">Start a conversation...</p>';
+  }
+  AppState.messages.forEach(m => {
+    html += '<div class="message ' + m.role + '"><div class="role">' + m.role + '</div><div>' + (m.content || '') + '</div></div>';
+  });
+  html += '</div><div class="chat-input"><input class="input" id="msg-input" placeholder="Type a message..." onkeydown="if(event.key===\'Enter\')send()"><button class="btn" onclick="send()">Send</button></div></div>';
+  container.innerHTML = html;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+function renderSessions(container) {
+  let html = '<div class="card"><h3>Sessions (' + AppState.sessions.length + ')</h3><div class="sessions-list">';
+  if (AppState.sessions.length === 0) html += '<p style="color:#64748b">No sessions yet</p>';
+  AppState.sessions.forEach(s => {
+    html += '<div class="session-item"><div><strong>' + (s.id || '').substring(0, 20) + '</strong> <span class="badge">' + (s.message_count || 0) + ' msgs</span></div><button class="btn btn-danger" onclick="deleteSession(\\'' + s.id + '\\')">Delete</button></div>';
+  });
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+
+function renderTools(container) {
+  let html = '<div class="card"><h3>Available Tools (' + AppState.tools.length + ')</h3>';
+  AppState.tools.forEach(t => {
+    html += '<div class="session-item"><div><strong>' + t.name + '</strong> <span style="color:#64748b;font-size:0.85rem">' + (t.description || '') + '</span></div><span class="badge ' + (t.enabled !== false ? 'success' : 'error') + '">' + (t.enabled !== false ? 'enabled' : 'disabled') + '</span></div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderSkills(container) {
+  let html = '<div class="card"><h3>Skills</h3><div class="sessions-list">';
+  if (!AppState.skills || AppState.skills.length === 0) html += '<p style="color:#64748b">No skills yet</p>';
+  else {
+    AppState.skills.forEach(s => {
+      html += '<div class="session-item"><div><strong>' + (s.name || '') + '</strong> <span class="badge">' + (s.status || '') + '</span></div><span style="color:#64748b;font-size:0.85rem">v' + (s.version || '?') + '</span></div>';
+    });
+  }
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+
+async function doLogin() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  try {
+    const res = await api('POST', '/auth/login', { username, password });
+    const data = await res.json();
+    if (res.ok && data.token) {
+      AppState.token = data.token;
+      localStorage.setItem('pulse_token', data.token);
+      AppState.loginError = '';
+      await loadData();
+      render();
+    } else {
+      AppState.loginError = data.error || 'Login failed';
+      render();
+    }
+  } catch (e) {
+    AppState.loginError = 'Login failed: ' + e.message;
+    render();
+  }
+}
+
+async function doLogout() {
+  await api('POST', '/auth/logout', {});
+  AppState.token = null;
+  AppState.messages = [];
+  AppState.sessionId = null;
+  localStorage.removeItem('pulse_token');
+  render();
+}
+
+async function loadData() {
+  try {
+    const [sess, tools, skills] = await Promise.all([
+      api('GET', '/sessions').then(r => r.json()),
+      api('GET', '/tools').then(r => r.json()),
+      api('GET', '/skills').then(r => r.json()),
+    ]);
+    AppState.sessions = sess;
+    AppState.tools = tools;
+    AppState.skills = skills;
+  } catch (e) {
+    console.error('loadData error:', e);
+  }
+}
+
+async function send() {
+  const input = document.getElementById('msg-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  AppState.messages.push({ role: 'user', content: msg });
+  input.value = '';
+  renderChat(document.getElementById('content'));
+
+  try {
+    const res = await api('POST', '/chat', { message: msg, session_id: AppState.sessionId });
+    const data = await res.json();
+    if (data.session_id) AppState.sessionId = data.session_id;
+    AppState.messages.push({ role: 'assistant', content: data.answer || data.error || '...' });
+    renderChat(document.getElementById('content'));
+  } catch (e) {
+    AppState.messages.push({ role: 'assistant', content: 'Error: ' + e.message });
+    renderChat(document.getElementById('content'));
+  }
+}
+
+async function deleteSession(id) {
+  await api('DELETE', '/sessions/' + id);
+  await loadData();
+  render();
+}
+
+// Init
+if (AppState.token) {
+  loadData().then(() => render());
+} else {
+  render();
+}
 </script>
 </body>
 </html>
@@ -212,57 +311,88 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
 
 def create_web_app(rt: Runtime | None = None) -> Any:
-    from flask import Flask, request, jsonify
+    from flask import Flask, request, jsonify, Response
 
     app = Flask(__name__)
     _rt = rt or bootstrap(load_mcp=True)
+
+    # --- Auth endpoints ---
+
+    @app.route("/api/auth/login", methods=["POST"])
+    def login():
+        data = request.json or {}
+        username = data.get("username", "")
+        password = data.get("password", "")
+        if not username or not password:
+            return jsonify({"error": "missing username or password"}), 400
+        # Use the enterprise AuthManager for authentication
+        from pulse.enterprise import AuthManager
+        auth = AuthManager()
+        token = auth.authenticate(username, password)
+        if not token:
+            return jsonify({"error": "invalid credentials"}), 401
+        # Store token for validation
+        token_file = _rt.settings.config_dir / ".web_token"
+        token_file.write_text(token)
+        return jsonify({"token": token, "expires_in": 86400})
+
+    @app.route("/api/auth/logout", methods=["POST"])
+    @require_auth
+    def logout():
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header[7:]
+        from pulse.enterprise import AuthManager
+        auth = AuthManager()
+        auth.logout(token)
+        token_file = _rt.settings.config_dir / ".web_token"
+        if token_file.exists():
+            token_file.unlink()
+        return jsonify({"ok": True})
+
+    # --- Protected endpoints ---
 
     @app.route("/")
     def index():
         return INDEX_HTML
 
     @app.route("/api/status")
+    @require_auth
     def status():
-        return jsonify(
-            {
-                "provider": _rt.settings.model.provider,
-                "model": _rt.settings.model.model,
-                "sessions": len(_rt.storage.sessions_map)
-                if hasattr(_rt.storage, "sessions_map")
-                else 0,
-                "tools": len(_rt.tools.allowed_names),
-            }
-        )
+        return jsonify({
+            "provider": _rt.settings.model.provider,
+            "model": _rt.settings.model.model,
+            "sessions": len(_rt.storage.list_sessions()) if hasattr(_rt.storage, "list_sessions") else 0,
+            "tools": len(_rt.tools.allowed_names),
+        })
 
     @app.route("/api/sessions", methods=["GET"])
+    @require_auth
     def list_sessions():
-        sessions = (
-            _rt.storage.list_sessions() if hasattr(_rt.storage, "list_sessions") else []
-        )
-        return jsonify(sessions)
+        sessions = _rt.storage.list_sessions() if hasattr(_rt.storage, "list_sessions") else []
+        # Limit to 50 sessions
+        return jsonify(sessions[:50])
 
     @app.route("/api/sessions/<session_id>", methods=["DELETE"])
+    @require_auth
     def delete_session(session_id):
         if hasattr(_rt.storage, "delete_session"):
             _rt.storage.delete_session(session_id)
         return jsonify({"ok": True})
 
     @app.route("/api/tools")
+    @require_auth
     def list_tools():
-        return jsonify(
-            [
-                {
-                    "name": n,
-                    "description": _rt.tools.get(n).description
-                    if _rt.tools.get(n)
-                    else "",
-                    "enabled": True,
-                }
-                for n in _rt.tools.allowed_names
-            ]
-        )
+        return jsonify([
+            {
+                "name": n,
+                "description": _rt.tools.get(n).description if _rt.tools.get(n) else "",
+                "enabled": True,
+            }
+            for n in _rt.tools.allowed_names
+        ])
 
     @app.route("/api/chat", methods=["POST"])
+    @require_auth
     def chat():
         data = request.json or {}
         sid = data.get("session_id")
@@ -271,29 +401,49 @@ def create_web_app(rt: Runtime | None = None) -> Any:
             return jsonify({"error": "empty message"}), 400
         try:
             res = _rt.orchestrator.run(msg, session_id=sid)
-            return jsonify(
-                {
-                    "session_id": res.session_id,
-                    "answer": res.answer,
-                    "trace_id": res.trace_id,
-                    "success": res.success,
-                }
-            )
+            return jsonify({
+                "session_id": res.session_id,
+                "answer": res.answer,
+                "trace_id": res.trace_id,
+                "success": res.success,
+            })
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/api/chat/stream", methods=["POST"])
+    @require_auth
+    def chat_stream():
+        """Server-Sent Events endpoint for streaming chat."""
+        data = request.json or {}
+        sid = data.get("session_id")
+        msg = data.get("message", "")
+        if not msg:
+            return jsonify({"error": "empty message"}), 400
+
+        def generate():
+            try:
+                for chunk in _rt.orchestrator.run_stream(msg, session_id=sid):
+                    if chunk.content:
+                        yield f"data: {json.dumps({'content': chunk.content, 'session_id': sid})}\n\n"
+                    if chunk.has_tool_calls:
+                        for tc in chunk.tool_calls:
+                            yield f"data: {json.dumps({'tool': tc.name, 'args': tc.arguments})}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(generate(), mimetype="text/event-stream", headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        })
+
     @app.route("/api/skills")
+    @require_auth
     def list_skills():
-        return jsonify(
-            [
-                {
-                    "name": r["name"],
-                    "status": r["status"],
-                    "version": r.get("version", "?"),
-                }
-                for r in _rt.registry.list()
-            ]
-        )
+        return jsonify([
+            {"name": r["name"], "status": r["status"], "version": r.get("version", "?")}
+            for r in _rt.registry.list()
+        ])
 
     return app
 

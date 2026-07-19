@@ -1,4 +1,4 @@
-"""Core agent tools — expand the built-in toolkit beyond read-only operations.
+﻿"""Core agent tools — expand the built-in toolkit beyond read-only operations.
 
 This module provides the tools a self-improving agent actually needs to be useful:
 web search, web fetch, code execution, HTTP requests, and file editing.
@@ -7,6 +7,7 @@ web search, web fetch, code execution, HTTP requests, and file editing.
 from __future__ import annotations
 
 import ast
+import shlex
 import subprocess
 import urllib.parse
 import urllib.request
@@ -106,9 +107,7 @@ class WebFetchTool(Tool):
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 raw = resp.read().decode("utf-8", errors="replace")
-                # Remove scripts, styles
                 import re
-
                 raw = re.sub(
                     r"<script[^>]*>.*?</script>",
                     "",
@@ -143,18 +142,13 @@ class WriteFileTool(Tool):
     }
 
     def run(self, path: str = "", content: str = "", **kwargs: Any) -> ToolResult:
-        """Write ``content`` to ``path``, creating parent directories.
-
-        Creates a checkpoint snapshot if the file already exists.
-        """
+        """Write ``content`` to ``path``, creating parent directories."""
         try:
             p = Path(path)
             p.parent.mkdir(parents=True, exist_ok=True)
-            # Create checkpoint if file exists
             if p.exists():
                 try:
                     from pulse.security import create_checkpoint
-
                     create_checkpoint(p, label="write_file")
                 except Exception:
                     pass
@@ -180,13 +174,8 @@ class EditFileTool(Tool):
         "required": ["path", "old_string", "new_string"],
     }
 
-    def run(
-        self, path: str = "", old_string: str = "", new_string: str = "", **kwargs: Any
-    ) -> ToolResult:
-        """Replace ``old_string`` with ``new_string`` in file ``path``.
-
-        Automatically creates a checkpoint snapshot before modification.
-        """
+    def run(self, path: str = "", old_string: str = "", new_string: str = "", **kwargs: Any) -> ToolResult:
+        """Replace ``old_string`` with ``new_string`` in file ``path``."""
         try:
             p = Path(path)
             if not p.exists():
@@ -194,13 +183,11 @@ class EditFileTool(Tool):
             content = p.read_text(encoding="utf-8")
             if old_string not in content:
                 return ToolResult(ok=False, error="old_string not found in file")
-            # Create checkpoint before modification
             try:
                 from pulse.security import create_checkpoint
-
                 create_checkpoint(p, label="edit_file")
             except Exception:
-                pass  # checkpoint failure should not block the edit
+                pass
             new_content = content.replace(old_string, new_string)
             p.write_text(new_content, encoding="utf-8")
             return ToolResult(ok=True, output=f"edited {path}")
@@ -209,10 +196,10 @@ class EditFileTool(Tool):
 
 
 class PythonExecTool(Tool):
-    """Safely execute Python code and return stdout."""
+    """Safely execute Python code in a sandboxed subprocess and return stdout."""
 
     name = "python_exec"
-    description = "Execute Python code and return stdout. Args: code (str), timeout (int, optional, default 5)."
+    description = "Execute Python code safely in a sandbox and return stdout. Args: code (str), timeout (int, optional, default 5)."
 
     parameters = {
         "type": "object",
@@ -227,30 +214,18 @@ class PythonExecTool(Tool):
     }
 
     def run(self, code: str = "", timeout: int = 5, **kwargs: Any) -> ToolResult:
-        """Execute Python code in a subprocess and return stdout."""
+        """Execute Python code in a sandboxed subprocess and return stdout."""
         try:
             timeout = max(1, min(int(timeout), 30))
-            # Minimal AST safety check
-            try:
-                ast.parse(code)
-            except SyntaxError as se:
-                return ToolResult(ok=False, error=f"syntax error: {se}")
-            result = subprocess.run(
-                ["python", "-c", code],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-            output = result.stdout.strip() + (
-                f"\n[stderr] {result.stderr.strip()}" if result.stderr.strip() else ""
-            )
-            if result.returncode != 0:
-                return ToolResult(ok=False, error=f"exit {result.returncode}: {output}")
-            return ToolResult(ok=True, output="(no output)" if not output else output)
-        except subprocess.TimeoutExpired:
-            return ToolResult(ok=False, error=f"timeout after {timeout}s")
-        except FileNotFoundError:
-            return ToolResult(ok=False, error="python not found on PATH")
+            if not code.strip():
+                return ToolResult(ok=False, error="empty code")
+
+            from pulse.tools.sandboxed_exec import run_sandboxed
+
+            output = run_sandboxed(code, timeout=timeout)
+            if output.startswith("SandboxError:"):
+                return ToolResult(ok=False, error=output)
+            return ToolResult(ok=True, output=output)
         except Exception as e:
             return ToolResult(ok=False, error=str(e))
 
@@ -258,9 +233,7 @@ class PythonExecTool(Tool):
 class ShellExecTool(Tool):
     """Execute a shell command and return stdout.
 
-    Warning: this tool runs commands with ``shell=True``. User-supplied input
-    is interpolated into a shell string, so untrusted input can execute
-    arbitrary commands. Validate or sanitize inputs before passing them here.
+    Commands are executed without shell=True to prevent shell injection.
     """
 
     name = "shell_exec"
@@ -279,10 +252,7 @@ class ShellExecTool(Tool):
     }
 
     def run(self, command: str = "", timeout: int = 10, **kwargs: Any) -> ToolResult:
-        """Execute a shell command and return stdout (best-effort).
-
-        Applies secret redaction and command approval when configured.
-        """
+        """Execute a shell command and return stdout (best-effort)."""
         from pulse.security import (
             redact_secrets,
             requires_approval,
@@ -293,28 +263,19 @@ class ShellExecTool(Tool):
         if not command or not command.strip():
             return ToolResult(ok=False, error="empty command")
 
-        # Check if command is blocked
         if is_blocked(command):
             return ToolResult(ok=False, error="command blocked (too dangerous)")
 
-        # Check if approval needed
         mode = kwargs.get("approval_mode", ApprovalMode.OFF)
-        # Also check settings-level approval mode
         if mode == ApprovalMode.OFF:
             from pulse.config.settings import load_settings
-
             try:
                 _s = load_settings()
-                _mode_map = {
-                    "off": ApprovalMode.OFF,
-                    "manual": ApprovalMode.MANUAL,
-                    "smart": ApprovalMode.SMART,
-                }
+                _mode_map = {"off": ApprovalMode.OFF, "manual": ApprovalMode.MANUAL, "smart": ApprovalMode.SMART}
                 mode = _mode_map.get(_s.approval_mode, ApprovalMode.OFF)
             except Exception:
                 pass
         if requires_approval(command, mode):
-            # Return a prompt for user approval
             return ToolResult(
                 ok=False,
                 error=f"approval_required: command '{command[:80]}' requires user confirmation (mode={mode})",
@@ -322,9 +283,12 @@ class ShellExecTool(Tool):
 
         try:
             timeout = max(1, min(int(timeout), 60))
+            parts = shlex.split(command)
+            if not parts:
+                return ToolResult(ok=False, error="empty command")
+
             result = subprocess.run(
-                command,
-                shell=True,
+                parts,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -332,13 +296,14 @@ class ShellExecTool(Tool):
             output = result.stdout.strip() + (
                 f"\n[stderr] {result.stderr.strip()}" if result.stderr.strip() else ""
             )
-            # Redact secrets from output
             output = redact_secrets(output, enabled=True)
             if result.returncode != 0:
                 return ToolResult(ok=False, error=f"exit {result.returncode}: {output}")
             return ToolResult(ok=True, output="(no output)" if not output else output)
         except subprocess.TimeoutExpired:
             return ToolResult(ok=False, error=f"timeout after {timeout}s")
+        except ValueError as e:
+            return ToolResult(ok=False, error=f"invalid command: {e}")
         except Exception as e:
             return ToolResult(ok=False, error=str(e))
 
@@ -368,13 +333,10 @@ class HttpClientTool(Tool):
     }
 
     def run(
-        self,
-        url: str = "",
-        method: str = "GET",
+        self, url: str = "", method: str = "GET",
         headers: dict[str, str] | None = None,
         body: str | None = None,
-        timeout: int = 15,
-        **kwargs: Any,
+        timeout: int = 15, **kwargs: Any,
     ) -> ToolResult:
         """Make an HTTP request and return status + body."""
         try:
@@ -388,9 +350,6 @@ class HttpClientTool(Tool):
             timeout = max(1, min(int(timeout), 60))
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 resp_body = resp.read().decode("utf-8", errors="replace")[:5000]
-                return ToolResult(
-                    ok=True,
-                    output=f"Status: {resp.status}\n\n{resp_body}",
-                )
+                return ToolResult(ok=True, output=f"Status: {resp.status}\n\n{resp_body}")
         except Exception as e:
             return ToolResult(ok=False, error=str(e))

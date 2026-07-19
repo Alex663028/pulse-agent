@@ -473,20 +473,23 @@ class MCPManager:
                 client = MCPClient(command=cfg.command, args=list(cfg.args or []))
                 client.start()
                 specs = client.list_tools()
-                client.stop()
-                return cfg.name, specs, None
+                return cfg.name, specs, None, client
             except Exception as e:
-                return cfg.name, [], str(e)
+                return cfg.name, [], str(e), None
 
         total = 0
         with ThreadPoolExecutor(max_workers=len(enabled_configs) or 1) as ex:
             futures = [ex.submit(_discover, cfg) for cfg in enabled_configs]
             for fut in futures:
-                name, specs, err = fut.result()
+                name, specs, err, client = fut.result()
                 if err:
                     self._errors[name] = str(err)
+                    if client:
+                        client.stop()
                     logger.warning("MCP server '%s' failed discovery: %s", name, err)
                 else:
+                    # Keep the client connection alive for reuse
+                    self._clients[name] = client
                     self._specs[name] = specs
                     for spec in specs:
                         tool = MCPTool(

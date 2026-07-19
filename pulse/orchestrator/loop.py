@@ -1,4 +1,4 @@
-"""Core orchestration loop."""
+"""Core orchestration loop - reliability-first orchestration."""
 
 from __future__ import annotations
 
@@ -24,10 +24,20 @@ from pulse.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
-
-def _est(text: str) -> int:
-    cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
-    return max(1, cjk * 2 + (len(text) - cjk * 2) // 3)
+# Use tiktoken for accurate token counting when available, fallback to heuristic
+try:
+    import tiktoken
+    _ENC = tiktoken.get_encoding("cl100k_base")
+    def _est(text: str) -> int:
+        try:
+            return len(_ENC.encode(text))
+        except Exception:
+            cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
+            return max(1, cjk * 2 + (len(text) - cjk * 2) // 3)
+except ImportError:
+    def _est(text: str) -> int:
+        cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
+        return max(1, cjk * 2 + (len(text) - cjk * 2) // 3)
 
 
 DANGEROUS_TOOLS = {"write_file", "edit_file", "shell_exec", "python_exec"}
@@ -98,12 +108,10 @@ class Orchestrator:
         if skills:
             sk_lines = [f"- **{s.name}**: {s.description[:200]}" for s in skills]
             parts.append(f"## Available skills\n{chr(10).join(sk_lines)}")
-        # Inject recent corrections as lessons
         with self._corrections_lock:
             recent = self._corrections[-5:]
         if recent:
             parts.append("## Recent lessons:\n" + "\n".join(f"- {c}" for c in recent))
-        # Inject RAG context if enabled
         ext = getattr(self, "_ext", None)
         if ext is not None and getattr(ext, "rag", None) is not None:
             try:
@@ -115,7 +123,6 @@ class Orchestrator:
         return "\n\n".join(parts)
 
     def add_correction(self, correction: str) -> None:
-        """Record a user correction ('No, I meant X', 'That's wrong because Y')."""
         with self._corrections_lock:
             self._corrections.append(correction.strip())
 
@@ -128,12 +135,13 @@ class Orchestrator:
     def _compact_messages(
         self, messages: list[LLMMessage], keep_tokens: int
     ) -> list[LLMMessage]:
+        """Compact messages: keep system + recent N, summarize older to storage."""
         keep_n = 6
         if len(messages) <= keep_n:
             return messages
-        kept = messages[:1] + messages[-(keep_n - 1) :]
+        kept = messages[:1] + messages[-(keep_n - 1):]
         older_messages = (
-            messages[1 : -keep_n + 1] if len(messages) > keep_n else messages[1:]
+            messages[1: -keep_n + 1] if len(messages) > keep_n else messages[1:]
         )
         older_text = "\n".join(m.content for m in older_messages if m.content)
         if not older_text:
@@ -170,14 +178,12 @@ class Orchestrator:
         )
 
     def run(self, task: str, session_id: Optional[str] = None) -> TaskResult:
-        """Run a task to completion and return TaskResult."""
         sid = session_id or f"sess:{uuid4().hex[:12]}"
         return self._run_internal(task, sid, use_streaming=False)
 
     def run_stream(
         self, task: str, session_id: Optional[str] = None
     ) -> Iterator[LLMResponse]:
-        """Run a task with streaming responses (yields chunks)."""
         sid = session_id or f"sess:{uuid4().hex[:12]}"
         yield from self._run_internal_streaming(task, sid)
 
@@ -249,10 +255,58 @@ class Orchestrator:
             history = self._session_histories.get(sid)
         if history is not None:
             return history + [LLMMessage(role="user", content=task)]
+        persisted = self._load_persisted_messages(sid)
+        if persisted:
+            return persisted + [LLMMessage(role="user", content=task)]
         return [
             LLMMessage(role="system", content=system_content),
             LLMMessage(role="user", content=task),
         ]
+
+    def _load_persisted_messages(self, sid: str) -> Optional[list[LLMMessage]]:
+        try:
+            rows = self.storage.get_messages(sid)
+            if not rows:
+                return None
+            messages = []
+            for r in rows:
+                msg = LLMMessage(role=r["role"], content=r.get("content", ""))
+                if r.get("tool_calls"):
+                    from pulse.llm.provider import ToolCall
+                    msg.tool_calls = [
+                        ToolCall(id=tc["id"], name=tc["name"], arguments=tc["arguments"])
+                        for tc in r["tool_calls"]
+                    ]
+                if r.get("tool_call_id"):
+                    msg.tool_call_id = r["tool_call_id"]
+                if r.get("name"):
+                    msg.name = r["name"]
+                messages.append(msg)
+            return messages
+        except Exception:
+            logger.debug("failed to load persisted messages for %s", sid, exc_info=True)
+            return None
+
+    def _persist_messages(self, sid: str, messages: list[LLMMessage]) -> None:
+        try:
+            self.storage.delete_messages(sid)
+            for m in messages:
+                tool_calls = None
+                if m.tool_calls:
+                    tool_calls = [
+                        {"id": tc.id, "name": tc.name, "arguments": tc.arguments}
+                        for tc in m.tool_calls
+                    ]
+                self.storage.store_message(
+                    session_id=sid,
+                    role=m.role,
+                    content=m.content,
+                    tool_calls=tool_calls,
+                    tool_call_id=m.tool_call_id,
+                    name=m.name,
+                )
+        except Exception:
+            logger.warning("failed to persist messages for %s", sid, exc_info=True)
 
     def _handle_tool_calls(
         self,
@@ -308,34 +362,24 @@ class Orchestrator:
             session_id=sid,
             outcome=True,
             used_skills=result.used_skills,
-            data={
-                "task": task,
-                "trajectory": result.trajectory,
-                "answer": resp.content,
-            },
+            data={"task": task, "trajectory": result.trajectory, "answer": resp.content},
         )
         if self.config.auto_evolve and len(result.trajectory) >= 3:
-            tool_actions = {
-                t.get("action", "") for t in result.trajectory if t.get("action")
-            }
+            tool_actions = {t.get("action", "") for t in result.trajectory if t.get("action")}
             if len(tool_actions) >= 2:
-                steps = [
-                    t["detail"].get("query") or t["action"] for t in result.trajectory
-                ]
+                steps = [t["detail"].get("query") or t["action"] for t in result.trajectory]
                 rec = propose_skill(
-                    task,
-                    [str(s) for s in steps],
-                    self.settings.skills_dir,
-                    llm=self.router.primary,
-                    registry=self.registry,
+                    task, [str(s) for s in steps], self.settings.skills_dir,
+                    llm=self.router.primary, registry=self.registry,
                 )
                 self.registry.register(rec)
                 result.candidate_skill = rec.name
                 self.obs.emit("skill_proposed", skill=rec.name)
+        self._persist_messages(sid, messages)
         return result
 
     def _run_internal_streaming(self, task: str, sid: str) -> Iterator[LLMResponse]:
-        """Streaming variant: yields token chunks as they arrive."""
+        """Streaming variant with tool call support."""
         self.obs.emit("session_start", session=sid, task=task[:200])
         self.storage.index_memory(sid, task)
         try:
@@ -354,6 +398,7 @@ class Orchestrator:
         budget = ContextBudget(max_tokens=self.settings.max_session_tokens)
         tool_schemas = self.tools.schemas()
         full_content = ""
+        collected_tool_calls = []
 
         for step in range(self.config.max_iterations):
             if budget.over_soft:
@@ -361,15 +406,15 @@ class Orchestrator:
                     messages, keep_tokens=self.settings.max_session_tokens // 4
                 )
             try:
-                for chunk in self.router.primary.chat_stream(
+                stream = self.router.primary.chat_stream(
                     messages, tools=tool_schemas or None
-                ):
+                )
+                for chunk in stream:
                     if chunk.content:
                         full_content += chunk.content
-                        yield chunk
+                        yield LLMResponse(content=chunk.content)
                     if chunk.has_tool_calls:
-                        # collect tool calls for execution
-                        pass
+                        collected_tool_calls.extend(chunk.tool_calls)
             except CtxOverflowError:
                 messages = self._compact_messages(
                     messages, keep_tokens=self.settings.max_session_tokens // 4
@@ -381,15 +426,31 @@ class Orchestrator:
                 return
 
             budget.reserve(_est(full_content))
-            # If no tool calls, we're done
+
+            # If we have tool calls, execute them and continue the loop
+            if collected_tool_calls:
+                messages.append(
+                    LLMMessage(role="assistant", content=full_content, tool_calls=collected_tool_calls)
+                )
+                for tc in collected_tool_calls:
+                    self._confirm_if_dangerous(tc.name, tc.arguments)
+                    r = self.tools.call(tc.name, tc.arguments)
+                    self.obs.tool_called(tc.name, r.ok, r.error or "")
+                    messages.append(
+                        LLMMessage(role="tool", name=tc.name, tool_call_id=tc.id,
+                                   content=r.output or r.error or "")
+                    )
+                collected_tool_calls = []
+                full_content = ""
+                continue
             break
 
         if full_content:
             messages.append(LLMMessage(role="assistant", content=full_content))
-            self._session_histories[sid] = messages
-            self.storage.store_session(
-                sid, summary=full_content[:200], token_usage=budget.used
-            )
+            with self._session_lock:
+                self._session_histories[sid] = messages
+            self.storage.store_session(sid, summary=full_content[:200], token_usage=budget.used)
+            self._persist_messages(sid, messages)
 
     def clear_session(self, session_id: str) -> None:
         self._session_histories.pop(session_id, None)
