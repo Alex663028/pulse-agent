@@ -126,8 +126,9 @@ def guarded(
             if cls == ErrorClass.TOOL_FAIL and on_tool_fail:
                 on_tool_fail()
             if cls in allow and attempt < policy.max_attempts:
-                delay = policy.base_delay * (2 ** (attempt - 1)) + _jitter(
-                    policy.jitter
+                delay = min(
+                    policy.base_delay * (2 ** (attempt - 1)) + _jitter(policy.jitter),
+                    30.0,
                 )
                 policy.sleep(delay)
                 continue

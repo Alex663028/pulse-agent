@@ -2,7 +2,7 @@
 
 Replaces Hermes' reliance on Honcho/cloud memory backends. Used for session
 logs, trajectory capture (for skill evolution + RL export later), eval runs,
-skill versioning, and full-text memory search.
+skill versioning, full-text memory search, and message history persistence.
 """
 
 from __future__ import annotations
@@ -56,6 +56,18 @@ CREATE TABLE IF NOT EXISTS fts_memory (
     ts TEXT
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS fts_memory_ix USING fts5(content, session_id UNINDEXED, ts UNINDEXED);
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT,
+    tool_calls TEXT,
+    tool_call_id TEXT,
+    name TEXT,
+    ts TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
 """
 
 
@@ -64,9 +76,9 @@ def _now() -> str:
 
 
 class Storage:
-    """SQLite-backed storage for sessions, trajectories, evals, skill versions and FTS5 memory.
+    """SQLite-backed storage for sessions, trajectories, evals, skill versions, FTS5 memory and messages.
 
-    Thread-safe: all write operations (sessions, trajectories, memory indexing, skill versions)
+    Thread-safe: all write operations (sessions, trajectories, memory indexing, skill versions, messages)
     are guarded by a lock so concurrent gateways (TUI + Telegram) can't corrupt the DB.
     """
 
@@ -194,6 +206,55 @@ class Storage:
             rows = self._conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
+    # ---- messages (session history) ----
+    def store_message(
+        self,
+        session_id: str,
+        role: str,
+        content: Optional[str] = None,
+        tool_calls: Optional[list[dict]] = None,
+        tool_call_id: Optional[str] = None,
+        name: Optional[str] = None,
+    ) -> int:
+        """Append a message to a session's history. Returns row id."""
+        with self._tx():
+            cur = self._conn.execute(
+                "INSERT INTO messages(session_id, role, content, tool_calls, tool_call_id, name, ts) VALUES(?,?,?,?,?,?,?)",
+                (
+                    session_id,
+                    role,
+                    content,
+                    json.dumps(tool_calls) if tool_calls else None,
+                    tool_call_id,
+                    name,
+                    _now(),
+                ),
+            )
+            return cur.lastrowid
+
+    def get_messages(self, session_id: str) -> list[dict[str, Any]]:
+        """Return all messages for a session in chronological order."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT role, content, tool_calls, tool_call_id, name FROM messages WHERE session_id = ? ORDER BY id ASC",
+                (session_id,),
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d.get("tool_calls"):
+                d["tool_calls"] = json.loads(d["tool_calls"])
+            result.append(d)
+        return result
+
+    def delete_messages(self, session_id: str) -> int:
+        """Delete all messages for a session. Returns count deleted."""
+        with self._tx():
+            cur = self._conn.execute(
+                "DELETE FROM messages WHERE session_id = ?", (session_id,)
+            )
+            return cur.rowcount
+
     # ---- eval runs ----
     def record_eval(
         self,
@@ -273,17 +334,17 @@ class Storage:
             )
 
     def list_sessions(self) -> list[dict[str, Any]]:
-        """Return all sessions with message count (from FTS index) and last activity."""
+        """Return all sessions with message count (from messages table) and last activity."""
         with self._lock:
             rows = self._conn.execute(
                 "SELECT s.id, s.created_at, s.summary, s.token_usage, "
-                "(SELECT COUNT(*) FROM fts_memory f WHERE f.session_id = s.id) AS message_count "
+                "(SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count "
                 "FROM sessions s ORDER BY s.created_at DESC LIMIT 100"
             ).fetchall()
         return [dict(r) for r in rows]
 
     def delete_session(self, session_id: str) -> None:
-        """Delete a session and its associated memory entries."""
+        """Delete a session and its associated memory entries and messages."""
         with self._tx():
             self._conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             self._conn.execute(
@@ -291,6 +352,9 @@ class Storage:
             )
             self._conn.execute(
                 "DELETE FROM fts_memory_ix WHERE session_id = ?", (session_id,)
+            )
+            self._conn.execute(
+                "DELETE FROM messages WHERE session_id = ?", (session_id,)
             )
 
     def search_sessions(self, query: str, limit: int = 10) -> list[dict[str, Any]]:

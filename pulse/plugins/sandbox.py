@@ -1,4 +1,4 @@
-"""Plugin sandbox â€” import isolation and permission whitelist.
+"""Plugin sandbox â€?import isolation and permission whitelist.
 
 Every plugin module runs inside a restricted execution context:
 - Only explicitly allowed built-in functions are available.
@@ -26,7 +26,7 @@ from typing import Any, Optional
 logger = logging.getLogger("pulse.plugins.sandbox")
 
 # ---------------------------------------------------------------------------
-# Allowed builtins â€” read-only / side-effect-free / pure-computation.
+# Allowed builtins â€?read-only / side-effect-free / pure-computation.
 # Deliberately excluded: open, compile, eval, exec, breakpoint, exit, quit,
 # help, input.
 # ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ SAFE_BUILTINS: set[str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Module import whitelist â€” prefix-based.
+# Module import whitelist â€?prefix-based.
 # Only modules whose fully-qualified name starts with one of these prefixes
 # (or is an exact match) can be imported inside the sandbox.
 # ---------------------------------------------------------------------------
@@ -353,11 +353,11 @@ class SandboxImportHook:
     """Import hook that enforces the module whitelist during plugin execution.
 
     Combines three protection layers:
-    1. ``sys.meta_path`` finder (using modern ``find_spec`` API) â€” intercepts
+    1. ``sys.meta_path`` finder (using modern ``find_spec`` API) â€?intercepts
        imports of denied modules before any other finder runs.
-    2. ``sys.modules`` cache eviction (except for essential modules) â€” prevents
+    2. ``sys.modules`` cache eviction (except for essential modules) â€?prevents
        ``import os`` from returning a cached module.
-    3. ``__builtins__`` restriction â€” replaces ``open/eval/exec/compile`` with
+    3. ``__builtins__`` restriction â€?replaces ``open/eval/exec/compile`` with
        stubs that raise ``PermissionError``.
 
     Install via :func:`install_sandbox_hook` and remove with
@@ -418,7 +418,7 @@ class SandboxImportHook:
         return None
 
     def create_module(self, spec: Any) -> Any:
-        """Loader.create_module â€” return None to use importlib's default module creation.
+        """Loader.create_module â€?return None to use importlib's default module creation.
 
         Returning None avoids recursion that would happen if we called
         ``importlib.util.module_from_spec`` (which re-enters the import system).
@@ -426,14 +426,14 @@ class SandboxImportHook:
         return None
 
     def exec_module(self, module: Any) -> None:
-        """Loader.exec_module â€” raise ImportError for denied modules."""
+        """Loader.exec_module â€?raise ImportError for denied modules."""
         raise ImportError(
             f"Plugin sandbox: import of '{module.__name__}' is not allowed. "
             f"Use __permissions__ to request additional access."
         )
 
     def load_module(self, fullname: str) -> Any:
-        """Legacy loader (Python < 3.4) â€” raise ImportError for denied modules."""
+        """Legacy loader (Python < 3.4) â€?raise ImportError for denied modules."""
         raise ImportError(
             f"Plugin sandbox: import of '{fullname}' is not allowed. "
             f"Use __permissions__ to request additional access."
